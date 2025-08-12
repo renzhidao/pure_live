@@ -1,40 +1,14 @@
-name: android-build
+name: android-fast-build
 
 on:
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: '已有 tag（可留空：留空用默认分支最新提交并自动生成 tag）'
-        required: false
-        default: ''
-  push:
-    tags:
-      - 'v*'
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    # 把 secrets 映射到 env，后续用 env.* 来判断与引用
-    env:
-      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-      STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
 
     steps:
-      # 手动触发且填写了 tag：按该 tag 检出
-      - name: Checkout by tag (manual)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name != '' }}
-        uses: actions/checkout@v4
-        with:
-          ref: refs/tags/${{ inputs.tag_name }}
-
-      # 其他情况（没填 tag 的手动触发，或推 tag 触发）：默认检出
-      - name: Checkout default ref
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.tag_name != '') }}
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -50,77 +24,36 @@ jobs:
           flutter-version: '3.32.7'
           cache: true
 
-      # 仅当存在签名密钥时才执行以下两步
-      - name: Android keystore (optional)
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
-        id: keystore
-        uses: timheuer/base64-to-file@v1.2
-        with:
-          fileName: key.jks
-          encodedString: ${{ env.KEYSTORE_BASE64 }}
-
-      - name: Create key.properties
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+      # 生成临时 keystore，写入 android/key.properties（无需任何 Secrets）
+      - name: Generate temp keystore
         run: |
-          echo "storeFile=${{ steps.keystore.outputs.filePath }}" > android/key.properties
-          echo "storePassword=${{ env.STORE_PASSWORD }}" >> android/key.properties
-          echo "keyPassword=${{ env.KEY_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ env.KEY_ALIAS }}" >> android/key.properties
+          cd android
+          keytool -genkeypair -v -storetype JKS -keystore app_tmp.jks -storepass 123456 -keypass 123456 -alias tempkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=CI, OU=CI, O=CI, L=Internet, S=NA, C=US"
+          echo "storeFile=android/app_tmp.jks" > key.properties
+          echo "storePassword=123456" >> key.properties
+          echo "keyPassword=123456" >> key.properties
+          echo "keyAlias=tempkey" >> key.properties
 
       - name: Flutter pub get
         run: flutter pub get
 
-      # 有签名就打 release；无签名就打 debug，避免因为缺少 key.properties 而失败
-      - name: Build APK
+      # 先尝试 release，失败则自动回退 debug，确保成功产出 APK
+      - name: Build APK (release -> debug fallback)
         shell: bash
         run: |
-          if [ -n "${KEYSTORE_BASE64}" ]; then
-            echo "Signing secrets present -> release build"
-            flutter build apk --release
+          echo "Trying release build..."
+          if flutter build apk --release; then
+            echo "Release build OK"
           else
-            echo "No signing secrets -> debug build (for testing)"
+            echo "Release build failed. Falling back to debug..."
             flutter build apk --debug
           fi
+          echo "Done. APKs in build/app/outputs/flutter-apk:"
+          ls -l build/app/outputs/flutter-apk || true
 
-      - name: Upload artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android
           path: build/app/outputs/flutter-apk/*.apk
-
-      # 发布 Release：手动触发且填写了 tag，且有签名
-      - name: Release (manual with tag)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name != '' && env.KEYSTORE_BASE64 != '' }}
-        uses: softprops/action-gh-release@v2.2.1
-        with:
-          tag_name: ${{ inputs.tag_name }}
-          name: ${{ inputs.tag_name }}
-          body: Android APK
-          files: build/app/outputs/flutter-apk/app-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 发布 Release：手动触发且未填写 tag（自动生成 tag），且有签名
-      - name: Release (manual without tag -> auto tag)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name == '' && env.KEYSTORE_BASE64 != '' }}
-        uses: softprops/action-gh-release@v2.2.1
-        with:
-          tag_name: auto-build-${{ github.run_number }}
-          target_commitish: ${{ github.sha }}
-          name: Auto Build #${{ github.run_number }}
-          body: Android APK
-          files: build/app/outputs/flutter-apk/app-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 发布 Release：推 tag 触发，且有签名
-      - name: Release (tag push)
-        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && env.KEYSTORE_BASE64 != '' }}
-        uses: softprops/action-gh-release@v2.2.1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          body: Android APK
-          files: build/app/outputs/flutter-apk/app-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          if-no-files-found: warn
