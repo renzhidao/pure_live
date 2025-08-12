@@ -1,17 +1,12 @@
-name: app-build-android
+name: app-build-android-only
 
 on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for the release'
+        description: '已有 tag（可留空，留空则用默认分支最新）'
         required: false
-        default: 'v1.0.0'
-      split_abi:
-        description: 'Split APK by ABI (true=多APK，false=单APK)'
-        type: boolean
-        required: false
-        default: false
+        default: ''
   push:
     tags:
       - "v*"
@@ -23,13 +18,13 @@ jobs:
       contents: write
 
     steps:
-      - name: 签出代码
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          # 兼容手动触发和推送 tag 两种场景
-          ref: ${{ inputs.tag_name || github.ref_name }}
+          # 有输入就按 tag 检出；没输入就用默认分支最新提交
+          ref: ${{ inputs.tag_name != '' && format('refs/tags/{0}', inputs.tag_name) || github.ref }}
 
-      # APK 签名
+      # 签名（如不需要签名，可移除该段和 android/key.properties 相关配置）
       - name: 下载 Android keystore
         id: android_keystore
         uses: timheuer/base64-to-file@v1.2
@@ -44,15 +39,14 @@ jobs:
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
 
-      # Java & Flutter
-      - name: 设置 JAVA 环境
+      - name: 设置 Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: "17"
+          java-version: '17'
           cache: 'gradle'
 
-      - name: 设置 Flutter 环境
+      - name: 设置 Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.32.7'
@@ -61,42 +55,24 @@ jobs:
       - name: 获取依赖
         run: flutter pub get
 
-      # 构建 APK（单 APK 或按 ABI 拆分）
+      # 只构建“单 APK”（不按 ABI 拆分）
       - name: 构建 APK
-        shell: bash
-        run: |
-          if [ "${{ inputs.split_abi }}" = "true" ]; then
-            flutter build apk --release --split-per-abi
-          else
-            flutter build apk --release
-          fi
+        run: flutter build apk --release
 
-      # 上传构建产物
-      - name: 上传 APK 至 Artifacts
+      - name: 上传到 Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android
-          path: build/app/outputs/flutter-apk/*.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
 
-      # 读取版本信息（可选）
-      - name: 读取版本信息
-        id: version
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: assets/version.json
-        continue-on-error: true
-
-      # 发布 Release
-      - name: 上传至 Release
+      # 如不需要发布 Release，可删掉这个步骤
+      - name: 上传到 Release
         uses: softprops/action-gh-release@v2.2.1
         with:
-          tag_name: ${{ inputs.tag_name || github.ref_name }}
-          name: ${{ inputs.tag_name || github.ref_name }}
-          body: ${{ steps.version.outputs.content && fromJson(steps.version.outputs.content).version_desc || '自动构建的 Android 发行包' }}
-          files: build/app/outputs/flutter-apk/*.apk
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('auto-build-{0}', github.run_number) }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ github.ref_type == 'tag' && github.ref_name || format('Auto Build #{0}', github.run_number) }}
+          body: '自动构建的 Android APK（单包）'
+          files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 输出任务状态
-        if: always()
-        run: echo "🍏 Android job's status is ${{ job.status }}."
