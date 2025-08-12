@@ -1,12 +1,11 @@
-name: app-build-android-only
+name: android-build
 
 on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: '已有 tag（可留空，留空则用默认分支最新）'
-        required: false
-        default: ''
+        description: '要构建的 tag（必须已存在，例如 v1.2.3）'
+        required: true
   push:
     tags:
       - "v*"
@@ -18,61 +17,80 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout
+      # 手动触发：按输入的 tag 检出
+      - name: Checkout (manual with tag)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: actions/checkout@v4
         with:
-          # 有输入就按 tag 检出；没输入就用默认分支最新提交
-          ref: ${{ inputs.tag_name != '' && format('refs/tags/{0}', inputs.tag_name) || github.ref }}
+          ref: refs/tags/${{ inputs.tag_name }}
 
-      # 签名（如不需要签名，可移除该段和 android/key.properties 相关配置）
-      - name: 下载 Android keystore
-        id: android_keystore
-        uses: timheuer/base64-to-file@v1.2
-        with:
-          fileName: key.jks
-          encodedString: ${{ secrets.KEYSTORE_BASE64 }}
+      # 推 tag 触发：用事件自带的 ref（即该 tag）
+      - name: Checkout (tag push)
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses: actions/checkout@v4
 
-      - name: 创建 key.properties
-        run: |
-          echo "storeFile=${{ steps.android_keystore.outputs.filePath }}" > android/key.properties
-          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/key.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
-
-      - name: 设置 Java
+      # Java & Flutter
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
           cache: 'gradle'
 
-      - name: 设置 Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.32.7'
           cache: true
 
-      - name: 获取依赖
+      # 签名（如暂时不需要签名，可把本段三步删掉，并在 android/app/build.gradle 中确保能构建 unsigned）
+      - name: Android keystore
+        id: keystore
+        uses: timheuer/base64-to-file@v1.2
+        with:
+          fileName: key.jks
+          encodedString: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Create key.properties
+        run: |
+          echo "storeFile=${{ steps.keystore.outputs.filePath }}" > android/key.properties
+          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+
+      - name: Flutter pub get
         run: flutter pub get
 
-      # 只构建“单 APK”（不按 ABI 拆分）
-      - name: 构建 APK
+      # 只构建单 APK（不按 ABI 拆分）
+      - name: Build APK (single)
         run: flutter build apk --release
 
-      - name: 上传到 Artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: android
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      # 如不需要发布 Release，可删掉这个步骤
-      - name: 上传到 Release
+      # 发布 Release（手动触发）
+      - name: Release (manual)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: softprops/action-gh-release@v2.2.1
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('auto-build-{0}', github.run_number) }}
-          target_commitish: ${{ github.sha }}
-          name: ${{ github.ref_type == 'tag' && github.ref_name || format('Auto Build #{0}', github.run_number) }}
-          body: '自动构建的 Android APK（单包）'
+          tag_name: ${{ inputs.tag_name }}
+          name: ${{ inputs.tag_name }}
+          body: 自动构建的 Android APK（单包）
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 发布 Release（推 tag 触发）
+      - name: Release (tag push)
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses: softprops/action-gh-release@v2.2.1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: 自动构建的 Android APK（单包）
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
