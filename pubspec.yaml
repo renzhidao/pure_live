@@ -26,6 +26,7 @@ dependencies:
   # ui related
   dynamic_color: ^1.8.1
   waterfall_flow: ^3.1.1
+  flutter_screenutil: ^5.9.3  # <--- 已为你添加屏幕适配库
   #Widget
   easy_refresh: ^3.4.0
   flutter_smart_dialog: ^4.9.5 #各种弹窗 Toast/Dialog/Popup
