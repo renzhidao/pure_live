@@ -1,0 +1,57 @@
+# ===============================================================
+# │        一键构建安卓测试版 APK · GitHub Actions 配置文件        │
+# ===============================================================
+# │ 说明:                                                       │
+# │ 1. 将此文件保存为 .github/workflows/build-debug-apk.yml       │
+# │ 2. 无需设置任何 Secrets 或签名信息                           │
+# │ 3. 在 Actions 页面手动点击 "Run workflow" 即可构建            │
+# ===============================================================
+
+name: Build Android Debug APK
+
+# 触发条件：
+# workflow_dispatch: 允许你在 GitHub Actions 页面手动点击 "Run workflow" 按钮来运行
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android-debug:
+    # 使用 ubuntu 环境进行构建，速度更快
+    runs-on: ubuntu-latest
+
+    steps:
+      # 第 1 步: 签出你的项目代码
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
+
+      # 第 2 步: 设置 Java 环境 (Gradle 需要)
+      - name: 2. Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: "17"
+          cache: 'gradle'
+
+      # 第 3 步: 设置 Flutter 环境
+      - name: 3. Setup Flutter Environment
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # 第 4 步: 安装项目依赖
+      - name: 4. Get Flutter Packages
+        run: flutter pub get
+
+      # 第 5 步: 构建安卓 Debug APK
+      - name: 5. Build Android Debug APK
+        run: flutter build apk --debug
+
+      # 第 6 步: 上传构建好的 APK 文件
+      - name: 6. Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # 上传文件的名称
+          name: Debug-APK
+          # 要上传的文件路径
+          path: build/app/outputs/flutter-apk/app-debug.apk
