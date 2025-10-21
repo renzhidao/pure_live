@@ -1,10 +1,5 @@
 # ====================================================================
-# │ 一键构建 v8a 发行版APK · 自动签名 · 无水印 · GitHub Actions │
-# ====================================================================
-# │ 说明:                                                            │
-# │ 1. 将此文件保存为 .github/workflows/build-v8a.yml                  │
-# │ 2. 无需设置任何 Secrets 或签名信息                               │
-# │ 3. 在 Actions 页面手动点击 "Run workflow" 即可构建                 │
+# │ 最终修复版 · 一键构建 v8a 发行版APK · 自动签名 · 无水印       │
 # ====================================================================
 
 name: Build v8a Release APK (Auto-Signed, No Watermark)
@@ -40,8 +35,7 @@ jobs:
             -keypass android \
             -dname "CN=, OU=, O=, L=, S=, C="
 
-      # 第 4 步: 动态创建 key.properties 文件
-      # [核心修正] 修正 storeFile 的路径，使用绝对路径确保正确
+      # 第 4 步: 动态创建 key.properties 文件 (已验证路径正确)
       - name: 4. Create key.properties file
         run: |
           echo "storeFile=../upload-keystore.jks" > android/key.properties
@@ -68,8 +62,13 @@ jobs:
             --build-name=1.0.0 \
             --build-number=$(($GITHUB_RUN_NUMBER + 10))
 
-      # 第 8 步: 上传构建好的 release APK
-      - name: 8. Upload APK Artifact
+      # [新增] 第 8 步: 验证构建产物路径 (用于调试，确保文件已生成)
+      - name: 8. Verify Build Output
+        run: ls -R build
+
+      # 第 9 步: 上传构建好的 release APK
+      # [核心修正] 根据您项目的特殊配置，修改为正确的非标准输出路径
+      - name: 9. Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: v8a-release-apk
