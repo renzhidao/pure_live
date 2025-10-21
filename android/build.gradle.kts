@@ -1,6 +1,6 @@
-// [核心修正] 新增 plugins 块来定义 Kotlin 版本
 plugins {
-    id("com.android.application") version "8.5.1" apply false
+    // [核心修正] 移除了错误的 "version '8.5.1'"，让系统自动选择版本
+    id("com.android.application") apply false
     id("org.jetbrains.kotlin.android") version "2.0.0" apply false
 }
 
@@ -18,14 +18,6 @@ allprojects {
     }
 }
 
-val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
-rootProject.layout.buildDirectory.value(newBuildDir)
-
-subprojects {
-    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
-    project.layout.buildDirectory.value(newSubprojectBuildDir)
-}
-
 tasks.register<Delete>("clean") {
-    delete(rootProject.layout.buildDirectory)
+    delete(rootProject.buildDir)
 }
