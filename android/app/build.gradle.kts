@@ -79,11 +79,11 @@ android {
             )
         }
        debug {
-            signingConfig = signingConfigs.getByName("release")
+            // signingConfig = signingConfigs.getByName("release") // 已禁用此行，确保 debug 版本无需签名
         }
     }
 }
 
 flutter {
     source = "../.."
-}    
+}
