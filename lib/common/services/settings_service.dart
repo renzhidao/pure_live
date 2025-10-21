@@ -11,6 +11,11 @@ import 'package:pure_live/common/services/bilibili_account_service.dart';
 
 class SettingsService extends GetxController {
   SettingsService() {
+    // [新增] 监听弹幕区域开关，并持久化保存
+    showDanmakuArea.listen((value) {
+      PrefUtil.setBool('showDanmakuArea', value);
+    });
+
     enableDynamicTheme.listen((bool value) {
       PrefUtil.setBool('enableDynamicTheme', value);
       update(['myapp']);
@@ -265,6 +270,9 @@ class SettingsService extends GetxController {
   final enableRotateScreenWithSystem = (PrefUtil.getBool('enableRotateScreenWithSystem') ?? false).obs;
 
   final enableScreenKeepOn = (PrefUtil.getBool('enableScreenKeepOn') ?? true).obs;
+
+  // [新增] 弹幕区域显示开关, 默认开启
+  final showDanmakuArea = (PrefUtil.getBool('showDanmakuArea') ?? true).obs;
 
   final enableAutoCheckUpdate = (PrefUtil.getBool('enableAutoCheckUpdate') ?? true).obs;
   final videoFitIndex = (PrefUtil.getInt('videoFitIndex') ?? 0).obs;
@@ -622,6 +630,9 @@ class SettingsService extends GetxController {
   }
 
   void fromJson(Map<String, dynamic> json) {
+    // [新增] 读取弹幕区域开关状态
+    showDanmakuArea.value = json['showDanmakuArea'] ?? true;
+    
     favoriteRooms.value = json['favoriteRooms'] != null
         ? (json['favoriteRooms'] as List).map<LiveRoom>((e) => LiveRoom.fromJson(jsonDecode(e))).toList()
         : [];
@@ -695,6 +706,9 @@ class SettingsService extends GetxController {
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
+    // [新增] 保存弹幕区域开关状态
+    json['showDanmakuArea'] = showDanmakuArea.value;
+    
     json['favoriteRooms'] = favoriteRooms.map<String>((e) => jsonEncode(e.toJson())).toList();
     json['webDavConfigs'] = webDavConfigs.map<String>((e) => jsonEncode(e.toJson())).toList();
     json['favoriteAreas'] = favoriteAreas.map<String>((e) => jsonEncode(e.toJson())).toList();
