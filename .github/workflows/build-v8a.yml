@@ -33,17 +33,18 @@ jobs:
       - name: 3. Create Temporary Keystore
         run: |
           keytool -genkey -v \
-            -keystore android/app/upload-keystore.jks \
+            -keystore android/upload-keystore.jks \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -alias upload \
             -storepass android \
             -keypass android \
             -dname "CN=, OU=, O=, L=, S=, C="
 
-      # [核心修正 1] 动态创建 key.properties 文件来引用上面的临时签名
+      # 第 4 步: 动态创建 key.properties 文件
+      # [核心修正] 修正 storeFile 的路径，使用绝对路径确保正确
       - name: 4. Create key.properties file
         run: |
-          echo "storeFile=app/upload-keystore.jks" > android/key.properties
+          echo "storeFile=../upload-keystore.jks" > android/key.properties
           echo "storePassword=android" >> android/key.properties
           echo "keyPassword=android" >> android/key.properties
           echo "keyAlias=upload" >> android/key.properties
@@ -59,7 +60,7 @@ jobs:
       - name: 6. Get Flutter Packages
         run: flutter pub get
 
-      # [核心修正 2] 使用干净的 flutter build 命令，它会自动读取 key.properties
+      # 第 7 步: 构建 Release APK
       - name: 7. Build Android arm64-v8a Release APK
         run: |
           flutter build apk --release \
