@@ -1,25 +1,23 @@
-# ===============================================================
-# │       一键构建 v8a 架构 APK · 无需密钥 · GitHub Actions        │
-# ===============================================================
-# │ 说明:                                                       │
-# │ 1. 将此文件保存为 .github/workflows/build-v8a.yml             │
-# │ 2. 无需设置任何 Secrets 或签名信息                           │
-# │ 3. 在 Actions 页面手动点击 "Run workflow" 即可构建            │
-# ===============================================================
+# ====================================================================
+# │ 一键构建 v8a 发行版APK · 自动签名 · 无水印 · GitHub Actions │
+# ====================================================================
+# │ 说明:                                                            │
+# │ 1. 将此文件保存为 .github/workflows/build-v8a.yml                  │
+# │ 2. 无需设置任何 Secrets 或签名信息                               │
+# │ 3. 在 Actions 页面手动点击 "Run workflow" 即可构建                 │
+# ====================================================================
 
-name: Build arm64-v8a APK (No Keys Needed)
+name: Build v8a Release APK (Auto-Signed, No Watermark)
 
-# 触发条件：
-# workflow_dispatch: 允许你在 GitHub Actions 页面手动点击 "Run workflow" 按钮来运行
 on:
   workflow_dispatch:
 
 jobs:
-  build-android-v8a:
+  build-android-release-v8a:
     runs-on: ubuntu-latest
 
     steps:
-      # 第 1 步: 签出你的项目代码
+      # 第 1 步: 签出代码
       - name: 1. Checkout Code
         uses: actions/checkout@v4
 
@@ -31,24 +29,45 @@ jobs:
           java-version: "17"
           cache: 'gradle'
 
-      # 第 3 步: 设置 Flutter 环境
-      - name: 3. Setup Flutter Environment
+      # [核心修正 1] 在云端自动生成一个临时签名文件
+      - name: 3. Create Temporary Keystore
+        run: |
+          keytool -genkey -v \
+            -keystore android/app/upload-keystore.jks \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias upload \
+            -storepass android \
+            -keypass android \
+            -dname "CN=, OU=, O=, L=, S=, C="
+
+      # 第 4 步: 设置 Flutter 环境
+      - name: 4. Setup Flutter Environment
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      # 第 4 步: 安装项目依赖
-      - name: 4. Get Flutter Packages
+      # 第 5 步: 安装项目依赖
+      - name: 5. Get Flutter Packages
         run: flutter pub get
 
-      # 第 5 步: 构建 arm64-v8a 架构的 Debug APK (使用 Flutter 自带的调试密钥自动签名)
-      - name: 5. Build Android arm64-v8a APK
-        run: flutter build apk --debug --target-platform android-arm64
+      # [核心修正 2] 构建真正的 release 版本，并只打包 arm64-v8a
+      # 使用 --build-name 和 --build-number 来定义版本信息
+      # 通过 -p 传入参数来使用刚才生成的临时签名
+      - name: 6. Build Android arm64-v8a Release APK
+        run: |
+          flutter build apk --release \
+            --target-platform android-arm64 \
+            --build-name=1.0.0 \
+            --build-number=$((GITHUB.run_number + 10)) \
+            -p android.keyAlias=upload \
+            -p android.keyPassword=android \
+            -p android.storeFile=app/upload-keystore.jks \
+            -p android.storePassword=android
 
-      # 第 6 步: 上传构建好的 v8a APK 文件
-      - name: 6. Upload APK Artifact
+      # [核心修正 3] 修正上传文件的路径，确保能找到 release 包
+      - name: 7. Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: v8a-debug-apk
-          path: build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+          name: v8a-release-apk
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
