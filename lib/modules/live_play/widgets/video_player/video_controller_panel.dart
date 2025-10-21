@@ -11,7 +11,7 @@ import 'package:pure_live/pkg/canvas_danmaku/danmaku_screen.dart';
 import 'package:pure_live/pkg/canvas_danmaku/models/danmaku_option.dart';
 import 'package:pure_live/modules/live_play/widgets/video_player/volume_control.dart';
 import 'package:pure_live/modules/live_play/widgets/video_player/video_controller.dart';
-import 'package:share_plus/share_plus.dart'; // [新增] 引入分享插件
+import 'package:url_launcher/url_launcher_string.dart'; // [核心修正] 引入url_launcher
 
 class VideoControllerPanel extends StatefulWidget {
   final VideoController controller;
@@ -626,9 +626,9 @@ class BottomActionBar extends StatelessWidget {
             children: <Widget>[
               PlayPauseButton(controller: controller),
               RefreshButton(controller: controller),
-              ShareButton(controller: controller), // [新增] 分享按钮
+              ShareButton(controller: controller),
               FavoriteButton(controller: controller),
-              DanmakuAreaButton(controller: controller), 
+              DanmakuAreaButton(controller: controller),
               DanmakuButton(controller: controller),
               SettingsButton(controller: controller),
               const Spacer(),
@@ -686,7 +686,7 @@ class RefreshButton extends StatelessWidget {
   }
 }
 
-// [新增] 分享按钮 Widget
+// [核心修正] 分享按钮，使用url_launcher
 class ShareButton extends StatelessWidget {
   const ShareButton({super.key, required this.controller});
 
@@ -695,18 +695,22 @@ class ShareButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        final box = context.findRenderObject() as RenderBox?;
-        Share.share(
-          '正在观看: ${controller.room.title}\n播放链接: ${controller.datasource}',
-          subject: '分享直播',
-          sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size,
-        );
+      onTap: () async {
+        try {
+          // 使用外部应用打开链接
+          await launchUrlString(
+            controller.datasource,
+            mode: LaunchMode.externalApplication,
+          );
+        } catch (e) {
+          SmartDialog.showToast('无法打开链接: $e');
+        }
       },
       child: Container(
         alignment: Alignment.center,
         padding: const EdgeInsets.all(12),
-        child: const Icon(Icons.share_rounded, color: Colors.white),
+        // 修改图标为更合适的“在外部打开”
+        child: const Icon(Icons.open_in_new_rounded, color: Colors.white),
       ),
     );
   }
