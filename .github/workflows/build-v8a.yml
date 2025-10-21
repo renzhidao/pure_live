@@ -40,31 +40,35 @@ jobs:
             -keypass android \
             -dname "CN=, OU=, O=, L=, S=, C="
 
-      # 第 4 步: 设置 Flutter 环境
-      - name: 4. Setup Flutter Environment
+      # [核心修正 1] 动态创建 key.properties 文件来引用上面的临时签名
+      - name: 4. Create key.properties file
+        run: |
+          echo "storeFile=app/upload-keystore.jks" > android/key.properties
+          echo "storePassword=android" >> android/key.properties
+          echo "keyPassword=android" >> android/key.properties
+          echo "keyAlias=upload" >> android/key.properties
+
+      # 第 5 步: 设置 Flutter 环境
+      - name: 5. Setup Flutter Environment
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      # 第 5 步: 安装项目依赖
-      - name: 5. Get Flutter Packages
+      # 第 6 步: 安装项目依赖
+      - name: 6. Get Flutter Packages
         run: flutter pub get
 
-      # 第 6 步: 构建真正的 release 版本
-      - name: 6. Build Android arm64-v8a Release APK
+      # [核心修正 2] 使用干净的 flutter build 命令，它会自动读取 key.properties
+      - name: 7. Build Android arm64-v8a Release APK
         run: |
           flutter build apk --release \
             --target-platform android-arm64 \
             --build-name=1.0.0 \
-            --build-number=$(($GITHUB_RUN_NUMBER + 10)) \
-            -p android.keyAlias=upload \
-            -p android.keyPassword=android \
-            -p android.storeFile=app/upload-keystore.jks \
-            -p android.storePassword=android
+            --build-number=$(($GITHUB_RUN_NUMBER + 10))
 
-      # 第 7 步: 上传构建好的 release APK
-      - name: 7. Upload APK Artifact
+      # 第 8 步: 上传构建好的 release APK
+      - name: 8. Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: v8a-release-apk
