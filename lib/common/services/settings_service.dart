@@ -11,7 +11,6 @@ import 'package:pure_live/common/services/bilibili_account_service.dart';
 
 class SettingsService extends GetxController {
   SettingsService() {
-    // [新增] 监听弹幕区域开关，并持久化保存
     showDanmakuArea.listen((value) {
       PrefUtil.setBool('showDanmakuArea', value);
     });
@@ -271,12 +270,15 @@ class SettingsService extends GetxController {
 
   final enableScreenKeepOn = (PrefUtil.getBool('enableScreenKeepOn') ?? true).obs;
 
-  // [新增] 弹幕区域显示开关, 默认开启
-  final showDanmakuArea = (PrefUtil.getBool('showDanmakuArea') ?? true).obs;
+  // [核心修改] 默认隐藏弹幕列表区域
+  final showDanmakuArea = (PrefUtil.getBool('showDanmakuArea') ?? false).obs;
 
   final enableAutoCheckUpdate = (PrefUtil.getBool('enableAutoCheckUpdate') ?? true).obs;
   final videoFitIndex = (PrefUtil.getInt('videoFitIndex') ?? 0).obs;
-  final hideDanmaku = (PrefUtil.getBool('hideDanmaku') ?? false).obs;
+  
+  // [核心修改] 默认隐藏视频上的弹幕
+  final hideDanmaku = (PrefUtil.getBool('hideDanmaku') ?? true).obs;
+  
   final danmakuTopArea = (PrefUtil.getDouble('danmakuTopArea') ?? 0.0).obs;
   final danmakuBottomArea = (PrefUtil.getDouble('danmakuBottomArea') ?? 0.5).obs;
   final danmakuSpeed = (PrefUtil.getDouble('danmakuSpeed') ?? 8.0).obs;
@@ -630,7 +632,6 @@ class SettingsService extends GetxController {
   }
 
   void fromJson(Map<String, dynamic> json) {
-    // [新增] 读取弹幕区域开关状态
     showDanmakuArea.value = json['showDanmakuArea'] ?? true;
     
     favoriteRooms.value = json['favoriteRooms'] != null
@@ -706,7 +707,6 @@ class SettingsService extends GetxController {
 
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
-    // [新增] 保存弹幕区域开关状态
     json['showDanmakuArea'] = showDanmakuArea.value;
     
     json['favoriteRooms'] = favoriteRooms.map<String>((e) => jsonEncode(e.toJson())).toList();
