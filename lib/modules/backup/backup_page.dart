@@ -1,12 +1,10 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:get/get.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/modules/backup/scan_page.dart';
-import 'package:pure_live/plugins/file_recover_utils.dart';
-import 'package:pure_live/modules/auth/utils/constants.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class BackupPage extends StatefulWidget {
@@ -38,14 +36,16 @@ class _BackupPageState extends State<BackupPage> {
       final backupData = settings.toJson();
       const jsonEncoder = JsonEncoder.withIndent('  ');
       final jsonString = jsonEncoder.convert(backupData);
+      
+      // [核心修复] 将字符串转换为Uint8List二进制数据
+      final Uint8List fileData = utf8.encode(jsonString);
 
-      // 3. 选择保存路径
+      // 3. 调用文件选择器保存
       final fileName = 'pure_live_backup_${DateTime.now().toIso8601String().split('T').first}.json';
       String? outputPath = await FilePicker.platform.saveFile(
         dialogTitle: '请选择备份文件保存位置',
         fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['json'],
+        bytes: fileData, // [核心修复] 在移动端必须传递bytes
       );
       
       if (outputPath == null) {
@@ -53,10 +53,6 @@ class _BackupPageState extends State<BackupPage> {
         return;
       }
       
-      // 4. 写入文件
-      final file = File(outputPath);
-      await file.writeAsString(jsonString);
-
       SmartDialog.showToast('备份成功!\n路径: $outputPath');
     } catch (e) {
       SmartDialog.showToast('备份失败: ${e.toString()}');
