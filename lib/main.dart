@@ -105,15 +105,20 @@ class _MyAppState extends State<MyApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    return Shortcuts(
-      shortcuts: {LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent()},
-      child: DynamicColorBuilder(
-        builder: (lightDynamic, darkDynamic) {
-          return ScreenUtilInit(
-            designSize: const Size(375, 812),
-            minTextAdapt: true,
-            splitScreenMode: true,
-            builder: (context, child) {
+    // ===============================================================
+    // │                  [核心修正] 使用 ScreenUtilInit 包裹 App        │
+    // ===============================================================
+    return ScreenUtilInit(
+      // 设置设计稿尺寸
+      designSize: const Size(375, 812),
+      minTextAdapt: true,
+      splitScreenMode: true,
+      // 使用 builder 来确保 ScreenUtil 初始化完成后再构建 MaterialApp
+      builder: (context, child) {
+        return Shortcuts(
+          shortcuts: {LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent()},
+          child: DynamicColorBuilder(
+            builder: (lightDynamic, darkDynamic) {
               return Obx(() {
                 if (Platform.isWindows) {
                   settings.videoPlayerIndex.value = 0;
@@ -131,8 +136,11 @@ class _MyAppState extends State<MyApp> with WindowListener {
                   darkTheme = MyTheme(colorScheme: darkDynamic).darkThemeData;
                 }
                 return GetMaterialApp(
+                  // [核心修正] 将弹窗初始化和字体缩放逻辑放到这里的 builder 中
                   builder: (context, widget) {
+                    // 初始化弹窗工具
                     widget = FlutterSmartDialog.init()(context, widget);
+                    // 保证文字大小不随系统设置变化
                     return MediaQuery(
                       data: MediaQuery.of(context).copyWith(
                         textScaler: TextScaler.linear(1.0),
@@ -147,10 +155,7 @@ class _MyAppState extends State<MyApp> with WindowListener {
                   locale: SettingsService.languages[settings.languageName.value]!,
                   navigatorObservers: [FlutterSmartDialog.observer, BackButtonObserver()],
                   supportedLocales: S.delegate.supportedLocales,
-                  // ===============================================================
-                  // │                     核心修复：移除了 const                    │
-                  // ===============================================================
-                  localizationsDelegates: [ // <--- 已移除这里的 const 关键字
+                  localizationsDelegates: const [
                     S.delegate,
                     GlobalMaterialLocalizations.delegate,
                     GlobalWidgetsLocalizations.delegate,
@@ -162,9 +167,9 @@ class _MyAppState extends State<MyApp> with WindowListener {
                 );
               });
             },
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
