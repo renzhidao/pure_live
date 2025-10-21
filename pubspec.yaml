@@ -26,7 +26,7 @@ dependencies:
   # ui related
   dynamic_color: ^1.8.1
   waterfall_flow: ^3.1.1
-  flutter_screenutil: ^5.9.3  # <--- 已为你添加屏幕适配库
+  flutter_screenutil: ^5.9.3
   #Widget
   easy_refresh: ^3.4.0
   flutter_smart_dialog: ^4.9.5 #各种弹窗 Toast/Dialog/Popup
@@ -99,6 +99,10 @@ dependencies:
   device_info_plus: ^11.5.0
   auto_orientation_v2: ^2.3.6
   very_good_infinite_list: ^0.9.0
+  
+  # [新增] 官方分享插件
+  share_plus: ^9.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
