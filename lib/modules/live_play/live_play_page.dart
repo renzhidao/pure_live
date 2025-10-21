@@ -190,22 +190,28 @@ class LivePlayPage extends GetView<LivePlayController> {
                           buildVideoPlayer(),
                           const ResolutionsRow(),
                           const Divider(height: 1),
-                          Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!))),
+                          // [修改] 根据设置决定是否显示弹幕区域
+                          Obx(() => settings.showDanmakuArea.value
+                              ? Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!)))
+                              : const SizedBox.shrink()),
                         ],
                       )
                     : Row(
                         children: <Widget>[
                           Expanded(child: buildVideoPlayer()),
-                          SizedBox(
-                            width: 400,
-                            child: Column(
-                              children: [
-                                const ResolutionsRow(),
-                                const Divider(height: 1),
-                                Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!))),
-                              ],
-                            ),
-                          ),
+                          // [修改] 根据设置决定是否显示弹幕区域
+                          Obx(() => settings.showDanmakuArea.value
+                              ? SizedBox(
+                                  width: 400,
+                                  child: Column(
+                                    children: [
+                                      const ResolutionsRow(),
+                                      const Divider(height: 1),
+                                      Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!))),
+                                    ],
+                                  ),
+                                )
+                              : const SizedBox.shrink()),
                         ],
                       ),
               );
