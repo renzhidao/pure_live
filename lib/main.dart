@@ -8,7 +8,7 @@ import 'package:pure_live/plugins/global.dart';
 import 'package:pure_live/routes/app_navigation.dart';
 import 'package:pure_live/plugins/file_recover_utils.dart';
 import 'package:pure_live/common/services/bilibili_account_service.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart'; // <--- 已为你添加引用
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 const kWindowsScheme = 'purelive://signin';
 
@@ -109,14 +109,10 @@ class _MyAppState extends State<MyApp> with WindowListener {
       shortcuts: {LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent()},
       child: DynamicColorBuilder(
         builder: (lightDynamic, darkDynamic) {
-          // ===============================================================
-          // │                核心修改: 使用 ScreenUtilInit                  │
-          // ===============================================================
           return ScreenUtilInit(
-            // 设置设计稿的尺寸，单位 dp
             designSize: const Size(375, 812),
-            minTextAdapt: true, // 是否根据宽度/高度中的最小值进行文字缩放
-            splitScreenMode: true, // 是否支持分屏模式
+            minTextAdapt: true,
+            splitScreenMode: true,
             builder: (context, child) {
               return Obx(() {
                 if (Platform.isWindows) {
@@ -135,11 +131,8 @@ class _MyAppState extends State<MyApp> with WindowListener {
                   darkTheme = MyTheme(colorScheme: darkDynamic).darkThemeData;
                 }
                 return GetMaterialApp(
-                  // 使用 ScreenUtil 的 builder
                   builder: (context, widget) {
-                    // 将 FlutterSmartDialog 的初始化放在这里
                     widget = FlutterSmartDialog.init()(context, widget);
-                    // 设置全局字体不随系统字体大小变化
                     return MediaQuery(
                       data: MediaQuery.of(context).copyWith(
                         textScaler: TextScaler.linear(1.0),
@@ -154,9 +147,12 @@ class _MyAppState extends State<MyApp> with WindowListener {
                   locale: SettingsService.languages[settings.languageName.value]!,
                   navigatorObservers: [FlutterSmartDialog.observer, BackButtonObserver()],
                   supportedLocales: S.delegate.supportedLocales,
-                  localizationsDelegates: const [
+                  // ===============================================================
+                  // │                     核心修复：移除了 const                    │
+                  // ===============================================================
+                  localizationsDelegates: [ // <--- 已移除这里的 const 关键字
                     S.delegate,
-                    GlobalMaterializations.delegate,
+                    GlobalMaterialLocalizations.delegate,
                     GlobalWidgetsLocalizations.delegate,
                     GlobalCupertinoLocalizations.delegate,
                   ],
