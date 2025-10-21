@@ -1,9 +1,4 @@
-plugins {
-    // [核心修正] 移除了错误的 "version '8.5.1'"，让系统自动选择版本
-    id("com.android.application") apply false
-    id("org.jetbrains.kotlin.android") version "2.0.0" apply false
-}
-
+import com.android.build.gradle.BaseExtension
 allprojects {
     repositories {
         maven { setUrl("https://maven.aliyun.com/repository/central") }
@@ -18,6 +13,30 @@ allprojects {
     }
 }
 
+val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
+rootProject.layout.buildDirectory.value(newBuildDir)
+
+subprojects {
+    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
+    project.layout.buildDirectory.value(newSubprojectBuildDir)
+}
+
+subprojects {
+    afterEvaluate {
+        extensions.findByType(BaseExtension::class.java)?.apply {
+            // 配置命名空间
+            if (namespace.isNullOrBlank() && project.group != null) {
+                namespace = project.group.toString()
+            }
+            // 配置 compileSdk
+            compileSdkVersion(36) // 注意：AGP 7.0+ 支持此属性写法
+        }
+    }
+}
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
 tasks.register<Delete>("clean") {
-    delete(rootProject.buildDir)
+    delete(rootProject.layout.buildDirectory)
 }
