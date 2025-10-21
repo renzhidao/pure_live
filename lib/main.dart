@@ -8,6 +8,7 @@ import 'package:pure_live/plugins/global.dart';
 import 'package:pure_live/routes/app_navigation.dart';
 import 'package:pure_live/plugins/file_recover_utils.dart';
 import 'package:pure_live/common/services/bilibili_account_service.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart'; // <--- 已为你添加引用
 
 const kWindowsScheme = 'purelive://signin';
 
@@ -108,42 +109,64 @@ class _MyAppState extends State<MyApp> with WindowListener {
       shortcuts: {LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent()},
       child: DynamicColorBuilder(
         builder: (lightDynamic, darkDynamic) {
-          return Obx(() {
-            if (Platform.isWindows) {
-              settings.videoPlayerIndex.value = 0;
-            } else {
-              if (settings.videoPlayerIndex.value > 1) {
-                settings.videoPlayerIndex.value = 0;
-              }
-            }
+          // ===============================================================
+          // │                核心修改: 使用 ScreenUtilInit                  │
+          // ===============================================================
+          return ScreenUtilInit(
+            // 设置设计稿的尺寸，单位 dp
+            designSize: const Size(375, 812),
+            minTextAdapt: true, // 是否根据宽度/高度中的最小值进行文字缩放
+            splitScreenMode: true, // 是否支持分屏模式
+            builder: (context, child) {
+              return Obx(() {
+                if (Platform.isWindows) {
+                  settings.videoPlayerIndex.value = 0;
+                } else {
+                  if (settings.videoPlayerIndex.value > 1) {
+                    settings.videoPlayerIndex.value = 0;
+                  }
+                }
 
-            var themeColor = HexColor(settings.themeColorSwitch.value);
-            ThemeData lightTheme = MyTheme(primaryColor: themeColor).lightThemeData;
-            ThemeData darkTheme = MyTheme(primaryColor: themeColor).darkThemeData;
-            if (settings.enableDynamicTheme.value) {
-              lightTheme = MyTheme(colorScheme: lightDynamic).lightThemeData;
-              darkTheme = MyTheme(colorScheme: darkDynamic).darkThemeData;
-            }
-            return GetMaterialApp(
-              title: '纯粹直播',
-              themeMode: SettingsService.themeModes[settings.themeModeName.value]!,
-              theme: lightTheme.copyWith(appBarTheme: AppBarTheme(surfaceTintColor: Colors.transparent)),
-              darkTheme: darkTheme.copyWith(appBarTheme: AppBarTheme(surfaceTintColor: Colors.transparent)),
-              locale: SettingsService.languages[settings.languageName.value]!,
-              navigatorObservers: [FlutterSmartDialog.observer, BackButtonObserver()],
-              builder: FlutterSmartDialog.init(),
-              supportedLocales: S.delegate.supportedLocales,
-              localizationsDelegates: const [
-                S.delegate,
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
-              ],
-              initialRoute: RoutePath.kSplash,
-              defaultTransition: Transition.native,
-              getPages: AppPages.routes,
-            );
-          });
+                var themeColor = HexColor(settings.themeColorSwitch.value);
+                ThemeData lightTheme = MyTheme(primaryColor: themeColor).lightThemeData;
+                ThemeData darkTheme = MyTheme(primaryColor: themeColor).darkThemeData;
+                if (settings.enableDynamicTheme.value) {
+                  lightTheme = MyTheme(colorScheme: lightDynamic).lightThemeData;
+                  darkTheme = MyTheme(colorScheme: darkDynamic).darkThemeData;
+                }
+                return GetMaterialApp(
+                  // 使用 ScreenUtil 的 builder
+                  builder: (context, widget) {
+                    // 将 FlutterSmartDialog 的初始化放在这里
+                    widget = FlutterSmartDialog.init()(context, widget);
+                    // 设置全局字体不随系统字体大小变化
+                    return MediaQuery(
+                      data: MediaQuery.of(context).copyWith(
+                        textScaler: TextScaler.linear(1.0),
+                      ),
+                      child: widget,
+                    );
+                  },
+                  title: '纯粹直播',
+                  themeMode: SettingsService.themeModes[settings.themeModeName.value]!,
+                  theme: lightTheme.copyWith(appBarTheme: AppBarTheme(surfaceTintColor: Colors.transparent)),
+                  darkTheme: darkTheme.copyWith(appBarTheme: AppBarTheme(surfaceTintColor: Colors.transparent)),
+                  locale: SettingsService.languages[settings.languageName.value]!,
+                  navigatorObservers: [FlutterSmartDialog.observer, BackButtonObserver()],
+                  supportedLocales: S.delegate.supportedLocales,
+                  localizationsDelegates: const [
+                    S.delegate,
+                    GlobalMaterializations.delegate,
+                    GlobalWidgetsLocalizations.delegate,
+                    GlobalCupertinoLocalizations.delegate,
+                  ],
+                  initialRoute: RoutePath.kSplash,
+                  defaultTransition: Transition.native,
+                  getPages: AppPages.routes,
+                );
+              });
+            },
+          );
         },
       ),
     );
