@@ -29,7 +29,7 @@ jobs:
           java-version: "17"
           cache: 'gradle'
 
-      # [核心修正 1] 在云端自动生成一个临时签名文件
+      # 第 3 步: 在云端自动生成一个临时签名文件
       - name: 3. Create Temporary Keystore
         run: |
           keytool -genkey -v \
@@ -51,21 +51,19 @@ jobs:
       - name: 5. Get Flutter Packages
         run: flutter pub get
 
-      # [核心修正 2] 构建真正的 release 版本，并只打包 arm64-v8a
-      # 使用 --build-name 和 --build-number 来定义版本信息
-      # 通过 -p 传入参数来使用刚才生成的临时签名
+      # 第 6 步: 构建真正的 release 版本
       - name: 6. Build Android arm64-v8a Release APK
         run: |
           flutter build apk --release \
             --target-platform android-arm64 \
             --build-name=1.0.0 \
-            --build-number=$((GITHUB.run_number + 10)) \
+            --build-number=$(($GITHUB_RUN_NUMBER + 10)) \
             -p android.keyAlias=upload \
             -p android.keyPassword=android \
             -p android.storeFile=app/upload-keystore.jks \
             -p android.storePassword=android
 
-      # [核心修正 3] 修正上传文件的路径，确保能找到 release 包
+      # 第 7 步: 上传构建好的 release APK
       - name: 7. Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
