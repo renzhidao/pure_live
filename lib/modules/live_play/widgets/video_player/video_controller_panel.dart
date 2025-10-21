@@ -11,6 +11,7 @@ import 'package:pure_live/pkg/canvas_danmaku/danmaku_screen.dart';
 import 'package:pure_live/pkg/canvas_danmaku/models/danmaku_option.dart';
 import 'package:pure_live/modules/live_play/widgets/video_player/volume_control.dart';
 import 'package:pure_live/modules/live_play/widgets/video_player/video_controller.dart';
+import 'package:share_plus/share_plus.dart'; // [新增] 引入分享插件
 
 class VideoControllerPanel extends StatefulWidget {
   final VideoController controller;
@@ -625,8 +626,9 @@ class BottomActionBar extends StatelessWidget {
             children: <Widget>[
               PlayPauseButton(controller: controller),
               RefreshButton(controller: controller),
+              ShareButton(controller: controller), // [新增] 分享按钮
               FavoriteButton(controller: controller),
-              DanmakuAreaButton(controller: controller), // [新增] 弹幕区域开关按钮
+              DanmakuAreaButton(controller: controller), 
               DanmakuButton(controller: controller),
               SettingsButton(controller: controller),
               const Spacer(),
@@ -684,7 +686,32 @@ class RefreshButton extends StatelessWidget {
   }
 }
 
-// [新增] 弹幕区域开关按钮 Widget
+// [新增] 分享按钮 Widget
+class ShareButton extends StatelessWidget {
+  const ShareButton({super.key, required this.controller});
+
+  final VideoController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        final box = context.findRenderObject() as RenderBox?;
+        Share.share(
+          '正在观看: ${controller.room.title}\n播放链接: ${controller.datasource}',
+          subject: '分享直播',
+          sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size,
+        );
+      },
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(12),
+        child: const Icon(Icons.share_rounded, color: Colors.white),
+      ),
+    );
+  }
+}
+
 class DanmakuAreaButton extends StatelessWidget {
   DanmakuAreaButton({super.key, required this.controller});
 
