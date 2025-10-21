@@ -1,0 +1,54 @@
+# ===============================================================
+# │       一键构建 v8a 架构 APK · 无需密钥 · GitHub Actions        │
+# ===============================================================
+# │ 说明:                                                       │
+# │ 1. 将此文件保存为 .github/workflows/build-v8a.yml             │
+# │ 2. 无需设置任何 Secrets 或签名信息                           │
+# │ 3. 在 Actions 页面手动点击 "Run workflow" 即可构建            │
+# ===============================================================
+
+name: Build arm64-v8a APK (No Keys Needed)
+
+# 触发条件：
+# workflow_dispatch: 允许你在 GitHub Actions 页面手动点击 "Run workflow" 按钮来运行
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android-v8a:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 第 1 步: 签出你的项目代码
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
+
+      # 第 2 步: 设置 Java 环境
+      - name: 2. Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: "17"
+          cache: 'gradle'
+
+      # 第 3 步: 设置 Flutter 环境
+      - name: 3. Setup Flutter Environment
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # 第 4 步: 安装项目依赖
+      - name: 4. Get Flutter Packages
+        run: flutter pub get
+
+      # 第 5 步: 构建 arm64-v8a 架构的 Debug APK (使用 Flutter 自带的调试密钥自动签名)
+      - name: 5. Build Android arm64-v8a APK
+        run: flutter build apk --debug --target-platform android-arm64
+
+      # 第 6 步: 上传构建好的 v8a APK 文件
+      - name: 6. Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v8a-debug-apk
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
