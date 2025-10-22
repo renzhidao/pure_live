@@ -180,15 +180,16 @@ class LivePlayPage extends GetView<LivePlayController> {
       ),
       body: Builder(
         builder: (BuildContext context) {
-          // [核心修正] 使用 OrientationBuilder 来准确判断横竖屏
+          // [核心修正] 使用宽高比来准确判断横竖屏，避免DPI影响
           return OrientationBuilder(
             builder: (context, orientation) {
-              // 判断是否为宽屏模式（横屏 或 屏幕宽度大于680）
-              final isLandscape = orientation == Orientation.landscape || MediaQuery.of(context).size.width > 680;
+              // 使用宽高比判断，而不是固定宽度值
+              final size = MediaQuery.of(context).size;
+              final isLandscape = size.width > size.height;
 
               return SafeArea(
                 child: isLandscape
-                    ? Row( // 横屏或宽屏：左右布局
+                    ? Row( // 横屏：左右布局
                         children: <Widget>[
                           Expanded(child: buildVideoPlayer()),
                           SizedBox(
