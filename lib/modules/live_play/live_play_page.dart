@@ -54,7 +54,7 @@ class LivePlayPage extends GetView<LivePlayController> {
               ? Row(
                   children: [
                     CircleAvatar(
-                      foregroundImage: controller.detail.value == null && controller.detail.value!.avatar!.isEmpty
+                      foregroundImage: controller.detail.value == null || controller.detail.value!.avatar!.isEmpty
                           ? null
                           : NetworkImage(controller.detail.value!.avatar!),
                       radius: 13,
@@ -65,9 +65,9 @@ class LivePlayPage extends GetView<LivePlayController> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: 120),
+                          constraints: const BoxConstraints(maxWidth: 120),
                           child: Text(
-                            controller.detail.value == null && controller.detail.value!.nick == null
+                            controller.detail.value == null || controller.detail.value!.nick == null
                                 ? ''
                                 : controller.detail.value!.nick!,
                             maxLines: 1,
@@ -106,9 +106,9 @@ class LivePlayPage extends GetView<LivePlayController> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: 120),
+                          constraints: const BoxConstraints(maxWidth: 120),
                           child: Text(
-                            controller.detail.value == null && controller.detail.value!.nick == null
+                            controller.detail.value == null || controller.detail.value!.nick == null
                                 ? ''
                                 : controller.detail.value!.nick!,
                             maxLines: 1,
@@ -180,25 +180,17 @@ class LivePlayPage extends GetView<LivePlayController> {
       ),
       body: Builder(
         builder: (BuildContext context) {
-          return LayoutBuilder(
-            builder: (context, constraint) {
-              final width = Get.width;
+          // [核心修正] 使用 OrientationBuilder 来准确判断横竖屏
+          return OrientationBuilder(
+            builder: (context, orientation) {
+              // 判断是否为宽屏模式（横屏 或 屏幕宽度大于680）
+              final isLandscape = orientation == Orientation.landscape || MediaQuery.of(context).size.width > 680;
+
               return SafeArea(
-                child: width <= 680
-                    ? Column(
-                        children: <Widget>[
-                          buildVideoPlayer(),
-                          const ResolutionsRow(),
-                          const Divider(height: 1),
-                          Obx(() => settings.showDanmakuArea.value
-                              ? Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!)))
-                              : const SizedBox.shrink()),
-                        ],
-                      )
-                    : Row(
+                child: isLandscape
+                    ? Row( // 横屏或宽屏：左右布局
                         children: <Widget>[
                           Expanded(child: buildVideoPlayer()),
-                          // [核心修正] 将右侧面板固定，只在内部切换弹幕列表的显示与隐藏
                           SizedBox(
                             width: 400,
                             child: Column(
@@ -207,11 +199,20 @@ class LivePlayPage extends GetView<LivePlayController> {
                                 const Divider(height: 1),
                                 Obx(() => settings.showDanmakuArea.value
                                     ? Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!)))
-                                    // 当隐藏时，用一个空的Expanded占位，而不是隐藏整个面板
                                     : Expanded(child: Container())),
                               ],
                             ),
                           ),
+                        ],
+                      )
+                    : Column( // 竖屏：上下布局
+                        children: <Widget>[
+                          buildVideoPlayer(),
+                          const ResolutionsRow(),
+                          const Divider(height: 1),
+                          Obx(() => settings.showDanmakuArea.value
+                              ? Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!)))
+                              : const SizedBox.shrink()),
                         ],
                       ),
               );
@@ -418,6 +419,12 @@ class _FavoriteFloatingButtonState extends State<FavoriteFloatingButton> {
       }
     });
   }
+  
+  @override
+  void dispose() {
+    subscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -465,7 +472,6 @@ class _FavoriteFloatingButtonState extends State<FavoriteFloatingButton> {
                 ),
               ).then((value) {
                 if (value) {
-                  setState(() => isFavorite = !isFavorite);
                   settings.removeRoom(widget.room);
                   EventBus.instance.emit('changeFavorite', true);
                 }
@@ -493,7 +499,6 @@ class _FavoriteFloatingButtonState extends State<FavoriteFloatingButton> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             onPressed: () {
-              setState(() => isFavorite = !isFavorite);
               settings.addRoom(widget.room);
               EventBus.instance.emit('changeFavorite', true);
             },
