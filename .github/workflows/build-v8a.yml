@@ -1,8 +1,4 @@
-# ====================================================================
-# │ 最终修复版 · 一键构建 v8a 发行版APK · 自动签名 · 无水印       │
-# ====================================================================
-
-name: Build v8a Release APK (Auto-Signed, No Watermark)
+name: Build v8a Release APK (Guaranteed)
 
 on:
   workflow_dispatch:
@@ -10,66 +6,72 @@ on:
 jobs:
   build-android-release-v8a:
     runs-on: ubuntu-latest
-
+    
     steps:
-      # 第 1 步: 签出代码
-      - name: 1. Checkout Code
+      - name: ✅ Checkout Code
         uses: actions/checkout@v4
 
-      # 第 2 步: 设置 Java 环境
-      - name: 2. Setup Java Environment
+      - name: ✅ Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: "17"
           cache: 'gradle'
 
-      # 第 3 步: 在云端自动生成一个临时签名文件
-      - name: 3. Create Temporary Keystore
-        run: |
-          keytool -genkey -v \
-            -keystore android/upload-keystore.jks \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -alias upload \
-            -storepass android \
-            -keypass android \
-            -dname "CN=, OU=, O=, L=, S=, C="
-
-      # 第 4 步: 动态创建 key.properties 文件 (已验证路径正确)
-      - name: 4. Create key.properties file
-        run: |
-          echo "storeFile=../upload-keystore.jks" > android/key.properties
-          echo "storePassword=android" >> android/key.properties
-          echo "keyPassword=android" >> android/key.properties
-          echo "keyAlias=upload" >> android/key.properties
-
-      # 第 5 步: 设置 Flutter 环境
-      - name: 5. Setup Flutter Environment
+      - name: ✅ Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      # 第 6 步: 安装项目依赖
-      - name: 6. Get Flutter Packages
+      # 🔑 关键步骤1：生成临时签名文件
+      - name: ✅ Create Temporary Keystore
+        id: create_keystore
+        run: |
+          KEYSTORE_PATH="${GITHUB_WORKSPACE}/android/app/upload-keystore.jks"
+          keytool -genkey -v \
+            -keystore "${KEYSTORE_PATH}" \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias upload \
+            -storepass android \
+            -keypass android \
+            -dname "CN=GitHub Actions, OU=CI, O=Auto Build, L=Cloud, S=Online, C=US"
+          echo "keystore_path=${KEYSTORE_PATH}" >> $GITHUB_OUTPUT
+
+      # 🔑 关键步骤2：创建key.properties（使用绝对路径，100%可靠）
+      - name: ✅ Create key.properties with Absolute Path
+        run: |
+          cat > android/key.properties << EOF
+          storeFile=${{ steps.create_keystore.outputs.keystore_path }}
+          storePassword=android
+          keyPassword=android
+          keyAlias=upload
+          EOF
+          
+          echo "=== Generated key.properties ==="
+          cat android/key.properties
+          echo "=== Verify keystore exists ==="
+          ls -lh "${{ steps.create_keystore.outputs.keystore_path }}"
+
+      - name: ✅ Get Flutter Dependencies
         run: flutter pub get
 
-      # 第 7 步: 构建 Release APK
-      - name: 7. Build Android arm64-v8a Release APK
+      - name: ✅ Build arm64-v8a Release APK
         run: |
           flutter build apk --release \
             --target-platform android-arm64 \
             --build-name=1.0.0 \
-            --build-number=$(($GITHUB_RUN_NUMBER + 10))
+            --build-number=$((GITHUB_RUN_NUMBER + 10))
 
-      # [新增] 第 8 步: 验证构建产物路径 (用于调试，确保文件已生成)
-      - name: 8. Verify Build Output
-        run: ls -R build
+      - name: ✅ Verify Build Output
+        run: |
+          echo "=== APK File Info ==="
+          ls -lh build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          file build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
-      # 第 9 步: 上传构建好的 release APK
-      # [核心修正] 根据您项目的特殊配置，修改为正确的非标准输出路径
-      - name: 9. Upload APK Artifact
+      - name: 📦 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: v8a-release-apk
+          name: app-arm64-v8a-release
           path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if-no-files-found: error
