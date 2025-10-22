@@ -190,7 +190,6 @@ class LivePlayPage extends GetView<LivePlayController> {
                           buildVideoPlayer(),
                           const ResolutionsRow(),
                           const Divider(height: 1),
-                          // [修改] 根据设置决定是否显示弹幕区域
                           Obx(() => settings.showDanmakuArea.value
                               ? Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!)))
                               : const SizedBox.shrink()),
@@ -199,19 +198,20 @@ class LivePlayPage extends GetView<LivePlayController> {
                     : Row(
                         children: <Widget>[
                           Expanded(child: buildVideoPlayer()),
-                          // [修改] 根据设置决定是否显示弹幕区域
-                          Obx(() => settings.showDanmakuArea.value
-                              ? SizedBox(
-                                  width: 400,
-                                  child: Column(
-                                    children: [
-                                      const ResolutionsRow(),
-                                      const Divider(height: 1),
-                                      Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!))),
-                                    ],
-                                  ),
-                                )
-                              : const SizedBox.shrink()),
+                          // [核心修正] 将右侧面板固定，只在内部切换弹幕列表的显示与隐藏
+                          SizedBox(
+                            width: 400,
+                            child: Column(
+                              children: [
+                                const ResolutionsRow(),
+                                const Divider(height: 1),
+                                Obx(() => settings.showDanmakuArea.value
+                                    ? Expanded(child: Obx(() => DanmakuListView(room: controller.detail.value!)))
+                                    // 当隐藏时，用一个空的Expanded占位，而不是隐藏整个面板
+                                    : Expanded(child: Container())),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
               );
