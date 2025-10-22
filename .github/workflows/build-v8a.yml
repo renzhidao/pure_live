@@ -1,4 +1,4 @@
-name: Build v8a Release APK (Guaranteed)
+name: Build v8a Release APK (Fixed)
 
 on:
   workflow_dispatch:
@@ -24,54 +24,48 @@ jobs:
           channel: stable
           cache: true
 
-      # 🔑 关键步骤1：生成临时签名文件
-      - name: ✅ Create Temporary Keystore
-        id: create_keystore
+      - name: ✅ Create Signing Configuration
         run: |
-          KEYSTORE_PATH="${GITHUB_WORKSPACE}/android/app/upload-keystore.jks"
+          KEYSTORE_FILE="${GITHUB_WORKSPACE}/android/app/upload-keystore.jks"
+          
           keytool -genkey -v \
-            -keystore "${KEYSTORE_PATH}" \
+            -keystore "${KEYSTORE_FILE}" \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -alias upload \
             -storepass android \
             -keypass android \
-            -dname "CN=GitHub Actions, OU=CI, O=Auto Build, L=Cloud, S=Online, C=US"
-          echo "keystore_path=${KEYSTORE_PATH}" >> $GITHUB_OUTPUT
-
-      # 🔑 关键步骤2：创建key.properties（使用绝对路径，100%可靠）
-      - name: ✅ Create key.properties with Absolute Path
-        run: |
+            -dname "CN=GitHub Actions, OU=CI, O=PureLive, L=Cloud, S=Auto, C=US"
+          
           cat > android/key.properties << EOF
-          storeFile=${{ steps.create_keystore.outputs.keystore_path }}
+          storeFile=${KEYSTORE_FILE}
           storePassword=android
           keyPassword=android
           keyAlias=upload
           EOF
           
-          echo "=== Generated key.properties ==="
-          cat android/key.properties
-          echo "=== Verify keystore exists ==="
-          ls -lh "${{ steps.create_keystore.outputs.keystore_path }}"
+          echo "✅ Keystore created at: ${KEYSTORE_FILE}"
+          ls -lh "${KEYSTORE_FILE}"
 
-      - name: ✅ Get Flutter Dependencies
+      - name: ✅ Get Dependencies
         run: flutter pub get
 
-      - name: ✅ Build arm64-v8a Release APK
+      # 🔥 关键修复：加上 --split-per-abi
+      - name: ✅ Build Split APKs
         run: |
           flutter build apk --release \
-            --target-platform android-arm64 \
+            --split-per-abi \
             --build-name=1.0.0 \
             --build-number=$((GITHUB_RUN_NUMBER + 10))
 
-      - name: ✅ Verify Build Output
+      - name: ✅ Verify APKs
         run: |
-          echo "=== APK File Info ==="
-          ls -lh build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          file build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          echo "📦 Generated APK files:"
+          ls -lh build/app/outputs/flutter-apk/*.apk
 
-      - name: 📦 Upload APK
+      # 🎯 只上传 v8a 版本
+      - name: 📦 Upload arm64-v8a APK Only
         uses: actions/upload-artifact@v4
         with:
-          name: app-arm64-v8a-release
+          name: pure-live-arm64-v8a-release
           path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
