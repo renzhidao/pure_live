@@ -123,25 +123,29 @@ class VideoController with ChangeNotifier {
   StreamSubscription? _widthSubscription;
   StreamSubscription? _heightSubscription;
 
-  // ✅ 保存所有订阅以便清理
+  // ✅ 正确区分类型：StreamSubscription 用于媒体播放器流
   StreamSubscription? _playingSubscription;
   StreamSubscription? _errorSubscription;
   StreamSubscription? _pipStatusSubscription;
-  StreamSubscription<BatteryState>? _batterySubscription; // ✅ 新增
-  Worker? _hasErrorWorker;
-  Worker? _showControllerWorker;
-  Worker? _isPlayingWorker;
-  Worker? _mediaInitializedWorker;
-  Worker? _mobileInitializedWorker;
+  StreamSubscription<BatteryState>? _batterySubscription;
   
-  // Danmaku 监听器
-  Worker? _hideDanmakuWorker;
-  Worker? _danmakuTopAreaWorker;
-  Worker? _danmakuBottomAreaWorker;
-  Worker? _danmakuSpeedWorker;
-  Worker? _danmakuFontSizeWorker;
-  Worker? _danmakuFontBorderWorker;
-  Worker? _danmakuOpacityWorker;
+  // ✅ Worker 用于 GetX 的 debounce
+  Worker? _hasErrorWorker;
+  
+  // ✅ StreamSubscription 用于 Rx.listen()
+  StreamSubscription? _showControllerSubscription;
+  StreamSubscription? _isPlayingSubscription;
+  StreamSubscription? _mediaInitializedSubscription;
+  StreamSubscription? _mobileInitializedSubscription;
+  
+  // Danmaku 监听器 - 使用 StreamSubscription
+  StreamSubscription? _hideDanmakuSubscription;
+  StreamSubscription? _danmakuTopAreaSubscription;
+  StreamSubscription? _danmakuBottomAreaSubscription;
+  StreamSubscription? _danmakuSpeedSubscription;
+  StreamSubscription? _danmakuFontSizeSubscription;
+  StreamSubscription? _danmakuFontBorderSubscription;
+  StreamSubscription? _danmakuOpacitySubscription;
 
   // Timer 引用
   Timer? _fullscreenTimer;
@@ -151,7 +155,7 @@ class VideoController with ChangeNotifier {
   Timer? _toggleWindowFullscreenTimer;
 
   void enableController() {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     showControllerTimer?.cancel();
     showControllerTimer = Timer(const Duration(seconds: 2), () {
       if (!hasDestory) {
@@ -225,7 +229,6 @@ class VideoController with ChangeNotifier {
           batteryLevel.value = value;
         }
       });
-      // ✅ 保存订阅引用
       _batterySubscription = _battery.onBatteryStateChanged.listen((BatteryState state) async {
         if (hasDestory) return;
         batteryLevel.value = await _battery.batteryLevel;
@@ -267,7 +270,6 @@ class VideoController with ChangeNotifier {
       );
       setDataSource(datasource);
       
-      // ✅ 保存订阅引用
       _playingSubscription = mediaPlayerController.player.stream.playing.listen((bool playing) {
         if (hasDestory) return;
         isPlaying.value = playing;
@@ -295,7 +297,7 @@ class VideoController with ChangeNotifier {
         isVertical.value = (player.state.height ?? 9) > (player.state.width ?? 16);
       });
       
-      // ✅ 保存 Worker
+      // ✅ debounce 返回 Worker
       _hasErrorWorker = debounce(hasError, (callback) {
         if (hasDestory) return;
         if (hasError.value && !livePlayController.isLastLine.value) {
@@ -304,7 +306,8 @@ class VideoController with ChangeNotifier {
         }
       }, time: const Duration(seconds: 2));
 
-      _showControllerWorker = showController.listen((p0) {
+      // ✅ .listen() 返回 StreamSubscription
+      _showControllerSubscription = showController.listen((p0) {
         if (hasDestory) return;
         if (showController.value) {
           if (isPlaying.value) {
@@ -316,9 +319,8 @@ class VideoController with ChangeNotifier {
         }
       });
 
-      _isPlayingWorker = isPlaying.listen((p0) {
+      _isPlayingSubscription = isPlaying.listen((p0) {
         if (hasDestory) return;
-        // 代表手动暂停了
         if (!isPlaying.value) {
           if (showController.value) {
             isActivePause.value = true;
@@ -340,7 +342,7 @@ class VideoController with ChangeNotifier {
         }
       });
 
-      _mediaInitializedWorker = mediaPlayerControllerInitialized.listen((value) {
+      _mediaInitializedSubscription = mediaPlayerControllerInitialized.listen((value) {
         if (hasDestory) return;
         if (fullScreenByDefault && datasource.isNotEmpty && value) {
           _fullscreenTimer?.cancel();
@@ -384,7 +386,7 @@ class VideoController with ChangeNotifier {
 
       mobileController?.addEventsListener(mobileStateListener);
       
-      _mobileInitializedWorker = mediaPlayerControllerInitialized.listen((value) {
+      _mobileInitializedSubscription = mediaPlayerControllerInitialized.listen((value) {
         if (hasDestory) return;
         if (fullScreenByDefault && datasource.isNotEmpty && value) {
           _fullscreenTimer?.cancel();
@@ -402,7 +404,7 @@ class VideoController with ChangeNotifier {
         }
       }, time: const Duration(seconds: 2));
 
-      _showControllerWorker = showController.listen((p0) {
+      _showControllerSubscription = showController.listen((p0) {
         if (hasDestory) return;
         if (showController.value) {
           if (isPlaying.value) {
@@ -414,7 +416,7 @@ class VideoController with ChangeNotifier {
         }
       });
 
-      _isPlayingWorker = isPlaying.listen((p0) {
+      _isPlayingSubscription = isPlaying.listen((p0) {
         if (hasDestory) return;
         if (!isPlaying.value) {
           if (showController.value) {
@@ -440,7 +442,7 @@ class VideoController with ChangeNotifier {
   }
 
   dynamic mobileStateListener(BetterPlayerEvent event) {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     if (mobileController?.videoPlayerController != null) {
       hasError.value = mobileController?.videoPlayerController?.value.hasError ?? false;
       isPlaying.value = mobileController?.isPlaying() ?? false;
@@ -471,8 +473,7 @@ class VideoController with ChangeNotifier {
   void initDanmaku() {
     hideDanmaku.value = PrefUtil.getBool('hideDanmaku') ?? false;
     
-    // ✅ 保存所有 Worker
-    _hideDanmakuWorker = hideDanmaku.listen((data) {
+    _hideDanmakuSubscription = hideDanmaku.listen((data) {
       if (hasDestory) return;
       if (data) {
         danmakuController.clear();
@@ -482,7 +483,7 @@ class VideoController with ChangeNotifier {
     });
     
     danmakuTopArea.value = PrefUtil.getDouble('danmakuTopArea') ?? 0.0;
-    _danmakuTopAreaWorker = danmakuTopArea.listen((data) {
+    _danmakuTopAreaSubscription = danmakuTopArea.listen((data) {
       if (hasDestory) return;
       PrefUtil.setDouble('danmakuTopArea', data);
       settings.danmakuTopArea.value = data;
@@ -490,7 +491,7 @@ class VideoController with ChangeNotifier {
     });
     
     danmakuBottomArea.value = PrefUtil.getDouble('danmakuBottomArea') ?? 0.0;
-    _danmakuBottomAreaWorker = danmakuBottomArea.listen((data) {
+    _danmakuBottomAreaSubscription = danmakuBottomArea.listen((data) {
       if (hasDestory) return;
       PrefUtil.setDouble('danmakuBottomArea', data);
       settings.danmakuBottomArea.value = data;
@@ -498,7 +499,7 @@ class VideoController with ChangeNotifier {
     });
     
     danmakuSpeed.value = PrefUtil.getDouble('danmakuSpeed') ?? 8;
-    _danmakuSpeedWorker = danmakuSpeed.listen((data) {
+    _danmakuSpeedSubscription = danmakuSpeed.listen((data) {
       if (hasDestory) return;
       PrefUtil.setDouble('danmakuSpeed', data);
       settings.danmakuSpeed.value = data;
@@ -506,7 +507,7 @@ class VideoController with ChangeNotifier {
     });
     
     danmakuFontSize.value = PrefUtil.getDouble('danmakuFontSize') ?? 16;
-    _danmakuFontSizeWorker = danmakuFontSize.listen((data) {
+    _danmakuFontSizeSubscription = danmakuFontSize.listen((data) {
       if (hasDestory) return;
       PrefUtil.setDouble('danmakuFontSize', data);
       settings.danmakuFontSize.value = data;
@@ -514,7 +515,7 @@ class VideoController with ChangeNotifier {
     });
     
     danmakuFontBorder.value = PrefUtil.getDouble('danmakuFontBorder') ?? 4.0;
-    _danmakuFontBorderWorker = danmakuFontBorder.listen((data) {
+    _danmakuFontBorderSubscription = danmakuFontBorder.listen((data) {
       if (hasDestory) return;
       PrefUtil.setDouble('danmakuFontBorder', data);
       settings.danmakuFontBorder.value = data;
@@ -522,7 +523,7 @@ class VideoController with ChangeNotifier {
     });
     
     danmakuOpacity.value = PrefUtil.getDouble('danmakuOpacity') ?? 1.0;
-    _danmakuOpacityWorker = danmakuOpacity.listen((data) {
+    _danmakuOpacitySubscription = danmakuOpacity.listen((data) {
       if (hasDestory) return;
       PrefUtil.setDouble('danmakuOpacity', data);
       settings.danmakuOpacity.value = data;
@@ -531,7 +532,7 @@ class VideoController with ChangeNotifier {
   }
 
   void updateDanmaku() {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     danmakuController.updateOption(
       DanmakuOption(
         fontSize: danmakuFontSize.value,
@@ -545,7 +546,7 @@ class VideoController with ChangeNotifier {
   }
 
   void sendDanmaku(LiveMessage msg) {
-    if (hasDestory || hideDanmaku.value) return; // ✅ 添加检查
+    if (hasDestory || hideDanmaku.value) return;
     if (isPlaying.value) {
       danmakuController.addDanmaku(
         DanmakuContentItem(msg.message, color: Color.fromARGB(255, msg.color.r, msg.color.g, msg.color.b)),
@@ -555,15 +556,14 @@ class VideoController with ChangeNotifier {
 
   @override
   void dispose() {
-    // ✅ 移除 async
     if (hasDestory == false) {
-      destory(); // ✅ 移除 await
+      destory();
     }
     super.dispose();
   }
 
   void refresh() async {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     await destory();
     _refreshTimer?.cancel();
     _refreshTimer = Timer(const Duration(seconds: 2), () {
@@ -574,7 +574,7 @@ class VideoController with ChangeNotifier {
   }
 
   void changeLine({bool active = false}) async {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     await destory();
     _changeLineTimer?.cancel();
     _changeLineTimer = Timer(const Duration(seconds: 2), () {
@@ -591,7 +591,7 @@ class VideoController with ChangeNotifier {
   Future<void> destory() async {
     hasDestory = true;
     
-    // ✅ 取消所有 Timer
+    // 取消所有 Timer
     showControllerTimer?.cancel();
     hasActivePause?.cancel();
     _debounceTimer?.cancel();
@@ -601,30 +601,32 @@ class VideoController with ChangeNotifier {
     _toggleFullscreenTimer?.cancel();
     _toggleWindowFullscreenTimer?.cancel();
     
-    // ✅ 取消所有订阅
+    // 取消所有订阅
     _playingSubscription?.cancel();
     _errorSubscription?.cancel();
     _widthSubscription?.cancel();
     _heightSubscription?.cancel();
     _pipStatusSubscription?.cancel();
-    _batterySubscription?.cancel(); // ✅ 新增
+    _batterySubscription?.cancel();
     
-    // ✅ 释放所有 Worker
+    // ✅ 释放 Worker (使用 dispose)
     _hasErrorWorker?.dispose();
-    _showControllerWorker?.dispose();
-    _isPlayingWorker?.dispose();
-    _mediaInitializedWorker?.dispose();
-    _mobileInitializedWorker?.dispose();
-    _hideDanmakuWorker?.dispose();
-    _danmakuTopAreaWorker?.dispose();
-    _danmakuBottomAreaWorker?.dispose();
-    _danmakuSpeedWorker?.dispose();
-    _danmakuFontSizeWorker?.dispose();
-    _danmakuFontBorderWorker?.dispose();
-    _danmakuOpacityWorker?.dispose();
     
-    // ✅ 释放 danmakuController
-    danmakuController.dispose();
+    // ✅ 取消 StreamSubscription (使用 cancel)
+    _showControllerSubscription?.cancel();
+    _isPlayingSubscription?.cancel();
+    _mediaInitializedSubscription?.cancel();
+    _mobileInitializedSubscription?.cancel();
+    _hideDanmakuSubscription?.cancel();
+    _danmakuTopAreaSubscription?.cancel();
+    _danmakuBottomAreaSubscription?.cancel();
+    _danmakuSpeedSubscription?.cancel();
+    _danmakuFontSizeSubscription?.cancel();
+    _danmakuFontBorderSubscription?.cancel();
+    _danmakuOpacitySubscription?.cancel();
+    
+    // ✅ 移除 danmakuController.dispose() - 该类没有此方法
+    // danmakuController.dispose();
     
     isPlaying.value = false;
     hasError.value = false;
@@ -646,7 +648,6 @@ class VideoController with ChangeNotifier {
       if (videoPlayerIndex == 0) {
         player.dispose();
       } else {
-        // ✅ 移除事件监听器
         mobileController?.removeEventsListener(mobileStateListener);
         mobileController?.dispose();
       }
@@ -660,9 +661,8 @@ class VideoController with ChangeNotifier {
   }
 
   void setDataSource(String url) async {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     datasource = url;
-    // fix datasource empty error
     if (datasource.isEmpty) {
       hasError.value = true;
       return;
@@ -711,7 +711,7 @@ class VideoController with ChangeNotifier {
   }
 
   void setVideoFit(BoxFit fit) {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     videoFit.value = fit;
     settings.videoFitIndex.value = videoFitIndex.value;
     if (videoPlayerIndex == 1) {
@@ -721,11 +721,10 @@ class VideoController with ChangeNotifier {
   }
 
   void togglePlayPause() {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     if (Platform.isWindows || videoPlayerIndex == 0) {
       mediaPlayerController.player.playOrPause();
     } else {
-      // ✅ 添加 null 检查
       if (mobileController != null) {
         isPlaying.value ? mobileController!.pause() : mobileController!.play();
       }
@@ -733,7 +732,7 @@ class VideoController with ChangeNotifier {
   }
 
   void exitFullScreen() {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     if (videoPlayerIndex == 1) {
       Future.delayed(const Duration(milliseconds: 100), () {
         if (!hasDestory) {
@@ -760,7 +759,7 @@ class VideoController with ChangeNotifier {
   }
 
   void toggleFullScreen() async {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     showLocked.value = false;
     showControllerTimer?.cancel();
     _toggleFullscreenTimer?.cancel();
@@ -804,7 +803,7 @@ class VideoController with ChangeNotifier {
   }
 
   void toggleWindowFullScreen() {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     showLocked.value = false;
     showControllerTimer?.cancel();
     _toggleWindowFullscreenTimer?.cancel();
@@ -826,7 +825,7 @@ class VideoController with ChangeNotifier {
   }
 
   void enterPipMode(BuildContext context) async {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     if ((Platform.isAndroid || Platform.isIOS)) {
       danmakuController.clear();
       danmakuController.resume();
@@ -846,7 +845,6 @@ class VideoController with ChangeNotifier {
     }
   }
 
-  // 注册音量变化监听器
   void registerVolumeListener() {
     FlutterVolumeController.addListener((volume) {
       if (hasDestory) return;
@@ -856,7 +854,6 @@ class VideoController with ChangeNotifier {
     });
   }
 
-  // volume & brightness
   Future<double?> volume() async {
     if (Platform.isWindows) {
       return mediaPlayerController.player.state.volume / 100;
@@ -869,7 +866,7 @@ class VideoController with ChangeNotifier {
   }
 
   void setVolume(double value) async {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     if (Platform.isWindows) {
       mediaPlayerController.player.setVolume(value * 100);
     } else {
@@ -879,14 +876,12 @@ class VideoController with ChangeNotifier {
   }
 
   void setBrightness(double value) async {
-    if (hasDestory) return; // ✅ 添加检查
+    if (hasDestory) return;
     if (Platform.isAndroid || Platform.isIOS) {
       await brightnessController.setApplicationScreenBrightness(value);
     }
   }
 }
-
-// use fullscreen with controller provider
 
 class DesktopFullscreen extends StatelessWidget {
   const DesktopFullscreen({super.key, required this.controller});
