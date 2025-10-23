@@ -1,3 +1,4 @@
+
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -38,7 +39,7 @@ class _BackupPageState extends State<BackupPage> {
       final jsonString = jsonEncoder.convert(backupData);
       
       // [核心修复] 将字符串转换为Uint8List二进制数据
-      final Uint8List fileData = utf8.encode(jsonString);
+      final Uint8List fileData = Uint8List.fromList(utf8.encode(jsonString));
 
       // 3. 调用文件选择器保存
       final fileName = 'pure_live_backup_${DateTime.now().toIso8601String().split('T').first}.json';
@@ -59,13 +60,13 @@ class _BackupPageState extends State<BackupPage> {
     }
   }
 
-  // 恢复备份
+  // 恢复备份（支持本应用整包设置 + 外部txt/json收藏列表的去重合并）
   Future<void> _recoverBackup() async {
     try {
-      // 1. 选择备份文件
+      // 1. 选择备份文件（支持 json 与 txt）
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json'],
+        allowedExtensions: ['json', 'txt'],
       );
 
       if (result == null || result.files.single.path == null) {
@@ -75,13 +76,29 @@ class _BackupPageState extends State<BackupPage> {
 
       // 2. 读取文件内容
       final file = File(result.files.single.path!);
-      final jsonString = await file.readAsString();
+      final content = await file.readAsString();
 
-      // 3. 解析JSON并应用数据
-      final jsonData = jsonDecode(jsonString);
-      settings.fromJson(jsonData);
+      // 3. 尝试解析
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(content);
+      } catch (e) {
+        SmartDialog.showToast('无法识别的备份格式：不是有效的JSON');
+        return;
+      }
 
-      SmartDialog.showToast('恢复成功!');
+      // 4. 分流处理：Map => 整包设置恢复；List => 外部收藏导入去重合并
+      if (decoded is Map<String, dynamic>) {
+        // 识别为本应用的整包设置
+        settings.fromJson(decoded);
+        SmartDialog.showToast('恢复成功（整包设置）');
+      } else if (decoded is List) {
+        // 识别为外部收藏列表：去重合并
+        final stats = settings.importExternalFavoritesFromList(decoded);
+        SmartDialog.showToast('导入完成：新增${stats.added}，合并${stats.merged}，跳过${stats.skipped}');
+      } else {
+        SmartDialog.showToast('无法识别的备份格式');
+      }
     } catch (e) {
       SmartDialog.showToast('恢复失败: ${e.toString()}');
     }

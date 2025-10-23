@@ -1,3 +1,4 @@
+
 import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
@@ -131,14 +132,33 @@ class FileRecoverUtils {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       dialogTitle: S.of(Get.context!).select_recover_file,
       type: FileType.custom,
-      allowedExtensions: ['txt'],
+      allowedExtensions: ['txt', 'json'],
     );
     if (result == null || result.files.single.path == null) return;
 
     final file = File(result.files.single.path!);
-    if (settings.recover(file)) {
-      SnackBarUtil.success(S.of(Get.context!).recover_backup_success);
-    } else {
+    try {
+      final content = await file.readAsString();
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(content);
+      } catch (_) {
+        SnackBarUtil.error('无法识别的备份格式：不是有效的JSON');
+        return;
+      }
+
+      if (decoded is Map<String, dynamic>) {
+        // 整包设置
+        settings.fromJson(decoded);
+        SnackBarUtil.success('恢复成功（整包设置）');
+      } else if (decoded is List) {
+        // 外部收藏合并
+        final stats = settings.importExternalFavoritesFromList(decoded);
+        SnackBarUtil.success('导入完成：新增${stats.added}，合并${stats.merged}，跳过${stats.skipped}');
+      } else {
+        SnackBarUtil.error('无法识别的备份格式');
+      }
+    } catch (e) {
       SnackBarUtil.error(S.of(Get.context!).recover_backup_failed);
     }
   }
@@ -216,7 +236,7 @@ class FileRecoverUtils {
   Future<bool> recoverSettingsBackup(String httpAddress) async {
     final SettingsService service = Get.find<SettingsService>();
     try {
-      final response = await await HttpClient.instance
+      final response = await HttpClient.instance
           .postJson('$httpAddress/api/setSettings', queryParameters: {"settings": jsonEncode(service.toJson())});
       return jsonDecode(response)['data'];
     } catch (e) {

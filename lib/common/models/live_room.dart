@@ -1,3 +1,4 @@
+
 enum LiveStatus { live, offline, replay, unknown, banned }
 
 class LiveRoom {
@@ -132,6 +133,82 @@ class LiveRoom {
       isRecord: isRecord ?? this.isRecord,
       liveStatus: liveStatus ?? this.liveStatus,
     );
+  }
+
+  /// 外部收藏结构转 LiveRoom（适配第三方 txt/json）
+  /// 支持字段：
+  /// - siteId/platform/id 前缀：平台
+  /// - roomId 或 id 的后半段：房间号
+  /// - userName -> nick
+  /// - face/avatar -> avatar
+  factory LiveRoom.fromExternalFavorite(Map<String, dynamic> ext) {
+    String? rawPlatform = (ext['siteId'] ?? ext['platform'] ?? '').toString();
+    String? rawId = (ext['id'] ?? '').toString();
+    String? rawRoomId = (ext['roomId'] ?? '').toString();
+    String? rawLink = (ext['link'] ?? '').toString();
+    String? userName = (ext['userName'] ?? ext['name'] ?? ext['nick'] ?? '').toString();
+    String? face = (ext['face'] ?? ext['avatar'] ?? '').toString();
+
+    String platform = _normalizePlatform(rawPlatform, fallbackId: rawId, fallbackLink: rawLink);
+    String roomId = _extractRoomId(rawRoomId, rawId);
+
+    return LiveRoom(
+      roomId: roomId,
+      platform: platform,
+      nick: userName,
+      avatar: face,
+      liveStatus: LiveStatus.unknown,
+      title: '',
+      link: rawLink,
+      isRecord: false,
+      status: false,
+    );
+  }
+
+  static String _extractRoomId(String rawRoomId, String rawId) {
+    if (rawRoomId.isNotEmpty) return rawRoomId;
+    // 尝试从 id 里截取 platform_roomId 的后半段
+    if (rawId.contains('_')) {
+      final parts = rawId.split('_');
+      if (parts.length >= 2 && parts[1].isNotEmpty) return parts[1];
+    }
+    // 兜底：提取连续数字
+    final match = RegExp(r'(\d{2,})').firstMatch(rawId);
+    if (match != null) return match.group(1) ?? '';
+    return '';
+  }
+
+  static String _normalizePlatform(String? platform, {String? fallbackId, String? fallbackLink}) {
+    final p = (platform ?? '').toLowerCase().trim();
+    String byP;
+    if (p.contains('bili')) byP = 'bilibili';
+    else if (p.contains('douyu')) byP = 'douyu';
+    else if (p.contains('huya')) byP = 'huya';
+    else if (p.contains('douyin') || p.contains('tik')) byP = 'douyin';
+    else if (p.contains('kuaishou') || p.contains('kuaishow')) byP = 'kuaishou';
+    else if (p == 'cc' || p.contains('cc.163')) byP = 'cc';
+    else if (p.contains('iptv') || p.contains('网络')) byP = 'iptv';
+    else byP = '';
+
+    if (byP.isNotEmpty) return byP;
+
+    // 通过 id 前缀推断
+    if ((fallbackId ?? '').contains('_')) {
+      final pref = fallbackId!.split('_').first.toLowerCase();
+      if (['bilibili', 'douyu', 'huya', 'douyin', 'kuaishou', 'kuaishow', 'cc', 'iptv'].contains(pref)) {
+        return pref == 'kuaishow' ? 'kuaishou' : pref;
+      }
+    }
+
+    // 通过链接域名推断
+    final link = (fallbackLink ?? '').toLowerCase();
+    if (link.contains('bilibili.com')) return 'bilibili';
+    if (link.contains('douyu.com')) return 'douyu';
+    if (link.contains('huya.com')) return 'huya';
+    if (link.contains('douyin.com') || link.contains('iesdouyin.com')) return 'douyin';
+    if (link.contains('kuaishou.com') || link.contains('kwai.com')) return 'kuaishou';
+    if (link.contains('cc.163.com')) return 'cc';
+    return 'UNKNOWN';
   }
 
   @override

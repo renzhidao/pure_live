@@ -1,3 +1,4 @@
+
 import 'dart:io';
 import 'dart:convert';
 import 'dart:developer';
@@ -275,10 +276,10 @@ class SettingsService extends GetxController {
 
   final enableAutoCheckUpdate = (PrefUtil.getBool('enableAutoCheckUpdate') ?? true).obs;
   final videoFitIndex = (PrefUtil.getInt('videoFitIndex') ?? 0).obs;
-  
+
   // [核心修改] 默认隐藏视频上的弹幕
   final hideDanmaku = (PrefUtil.getBool('hideDanmaku') ?? true).obs;
-  
+
   final danmakuTopArea = (PrefUtil.getDouble('danmakuTopArea') ?? 0.0).obs;
   final danmakuBottomArea = (PrefUtil.getDouble('danmakuBottomArea') ?? 0.5).obs;
   final danmakuSpeed = (PrefUtil.getDouble('danmakuSpeed') ?? 8.0).obs;
@@ -633,7 +634,7 @@ class SettingsService extends GetxController {
 
   void fromJson(Map<String, dynamic> json) {
     showDanmakuArea.value = json['showDanmakuArea'] ?? true;
-    
+
     favoriteRooms.value = json['favoriteRooms'] != null
         ? (json['favoriteRooms'] as List).map<LiveRoom>((e) => LiveRoom.fromJson(jsonDecode(e))).toList()
         : [];
@@ -708,7 +709,7 @@ class SettingsService extends GetxController {
   Map<String, dynamic> toJson() {
     Map<String, dynamic> json = {};
     json['showDanmakuArea'] = showDanmakuArea.value;
-    
+
     json['favoriteRooms'] = favoriteRooms.map<String>((e) => jsonEncode(e.toJson())).toList();
     json['webDavConfigs'] = webDavConfigs.map<String>((e) => jsonEncode(e.toJson())).toList();
     json['favoriteAreas'] = favoriteAreas.map<String>((e) => jsonEncode(e.toJson())).toList();
@@ -797,4 +798,90 @@ class SettingsService extends GetxController {
     };
     return json;
   }
+
+  // ===== 导入外部收藏（txt/json）去重合并 =====
+
+  ImportStats importExternalFavoritesFromJsonString(String jsonText) {
+    try {
+      final decoded = jsonDecode(jsonText);
+      if (decoded is List) {
+        return importExternalFavoritesFromList(decoded);
+      } else if (decoded is Map<String, dynamic>) {
+        // 识别到整包配置，直接走 fromJson 的路径
+        fromJson(decoded);
+        return ImportStats(added: 0, merged: 0, skipped: 0);
+      } else {
+        return ImportStats(added: 0, merged: 0, skipped: 0);
+      }
+    } catch (_) {
+      return ImportStats(added: 0, merged: 0, skipped: 0);
+    }
+  }
+
+  ImportStats importExternalFavoritesFromList(List<dynamic> items) {
+    final stats = ImportStats();
+    for (final it in items) {
+      try {
+        if (it is! Map) {
+          stats.skipped++;
+          continue;
+        }
+        final map = it.map((k, v) => MapEntry(k.toString(), v));
+        final room = LiveRoom.fromExternalFavorite(map.cast<String, dynamic>());
+
+        // 平台或房间号缺失，跳过
+        if ((room.platform ?? '').isEmpty || (room.roomId ?? '').isEmpty || (room.platform == 'UNKNOWN')) {
+          stats.skipped++;
+          continue;
+        }
+
+        // 按 platform + roomId 去重
+        final idx = favoriteRooms.indexWhere(
+          (e) => (e.platform ?? '').toLowerCase() == (room.platform ?? '').toLowerCase() && (e.roomId ?? '') == (room.roomId ?? ''),
+        );
+
+        if (idx >= 0) {
+          // 已存在，尝试补全字段
+          var cur = favoriteRooms[idx];
+          var updated = cur;
+          bool changed = false;
+          if ((cur.nick ?? '').isEmpty && (room.nick ?? '').isNotEmpty) {
+            updated = updated.copyWith(nick: room.nick);
+            changed = true;
+          }
+          if ((cur.avatar ?? '').isEmpty && (room.avatar ?? '').isNotEmpty) {
+            updated = updated.copyWith(avatar: room.avatar);
+            changed = true;
+          }
+          if ((cur.cover ?? '').isEmpty && (room.cover ?? '').isNotEmpty) {
+            updated = updated.copyWith(cover: room.cover);
+            changed = true;
+          }
+          if ((cur.link ?? '').isEmpty && (room.link ?? '').isNotEmpty) {
+            updated = updated.copyWith(link: room.link);
+            changed = true;
+          }
+          if (changed) {
+            favoriteRooms[idx] = updated;
+          }
+          stats.merged++;
+        } else {
+          // 新增
+          favoriteRooms.add(room);
+          stats.added++;
+        }
+      } catch (_) {
+        stats.skipped++;
+      }
+    }
+    // 触发持久化：由 favoriteRooms.listen 负责
+    return stats;
+  }
+}
+
+class ImportStats {
+  int added;
+  int merged;
+  int skipped;
+  ImportStats({this.added = 0, this.merged = 0, this.skipped = 0});
 }
