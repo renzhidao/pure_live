@@ -1,3 +1,4 @@
+
 import 'dart:math';
 import 'dart:convert';
 import 'package:get/get.dart';
@@ -214,113 +215,124 @@ class HuyaSite implements LiveSite {
 
   @override
   Future<LiveRoom> getRoomDetail({required String platform, required String roomId}) async {
-    var resultText = await HttpClient.instance.getText(
-      'https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=$roomId&showSecret=1',
-      header: {
-        'Accept': '*/*',
-        'Origin': 'https://www.huya.com',
-        'Referer': 'https://www.huya.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
-        "user-agent": kUserAgent,
-        "Cookie": settings.huyaCookie.value,
-      },
-    );
-    var result = json.decode(resultText);
-    if (result['status'] == 200 && result['data']['stream'] != null) {
-      dynamic data = result['data'];
-      var topSid = 0;
-      var subSid = 0;
-      var huyaLines = <HuyaLineModel>[];
-      var huyaBiterates = <HuyaBitRateModel>[];
-      //读取可用线路
-
-      var baseSteamInfoList = data['stream']['baseSteamInfoList'] as List<dynamic>;
-      var flvLines = data['stream']['flv']['multiLine'];
-      var hlsLines = data['stream']['hls']['multiLine'];
-      if (flvLines != null) {
-        for (var item in flvLines) {
-          if ((item["url"]?.toString() ?? "").isNotEmpty) {
-            var currentStream = baseSteamInfoList.firstWhere(
-              (element) => element["sCdnType"] == item["cdnType"],
-              orElse: () => null,
-            );
-            if (currentStream != null) {
-              topSid = currentStream["lChannelId"];
-              subSid = currentStream["lSubChannelId"];
-              huyaLines.add(
-                HuyaLineModel(
-                  line: currentStream['sFlvUrl'],
-                  lineType: HuyaLineType.flv,
-                  flvAntiCode: currentStream["sFlvAntiCode"].toString(),
-                  hlsAntiCode: currentStream["sHlsAntiCode"].toString(),
-                  streamName: currentStream["sStreamName"].toString(),
-                  cdnType: item["sCdnType"].toString(),
-                ),
-              );
-            }
-          }
-        }
-      }
-
-      if (hlsLines != null) {
-        for (var item in hlsLines) {
-          if ((item["url"]?.toString() ?? "").isNotEmpty) {
-            var currentStream = baseSteamInfoList.firstWhere(
-              (element) => element["sCdnType"] == item["cdnType"],
-              orElse: () => null,
-            );
-            if (currentStream != null) {
-              topSid = currentStream["lChannelId"];
-              subSid = currentStream["lSubChannelId"];
-              huyaLines.add(
-                HuyaLineModel(
-                  line: currentStream['sHlsUrl'],
-                  lineType: HuyaLineType.hls,
-                  flvAntiCode: currentStream["sFlvAntiCode"].toString(),
-                  hlsAntiCode: currentStream["sHlsAntiCode"].toString(),
-                  streamName: currentStream["sStreamName"].toString(),
-                  cdnType: item["sCdnType"].toString(),
-                ),
-              );
-            }
-          }
-        }
-      }
-      //清晰度
-      var biterates = data['liveData']['bitRateInfo'] != null
-          ? jsonDecode(data['liveData']['bitRateInfo'])
-          : data['stream']['flv']['rateArray'];
-      for (var item in biterates) {
-        var name = item["sDisplayName"].toString();
-        if (huyaBiterates.map((e) => e.name).toList().every((element) => element != name)) {
-          huyaBiterates.add(HuyaBitRateModel(bitRate: item["iBitRate"], name: name));
-        }
-      }
-      bool isXingxiu = data['liveData']['gid'] == 1663;
-      return LiveRoom(
-        cover: data['liveData']?['screenshot'] ?? '',
-        watching: data['liveData']?['userCount']?.toString() ?? '',
-        roomId: roomId,
-        area: data['liveData']?['gameFullName'] ?? '',
-        title: data['liveData']?['introduction'] ?? '',
-        nick: data['profileInfo']?['nick'] ?? '',
-        avatar: data['profileInfo']?['avatar180'] ?? '',
-        introduction: data['liveData']?['introduction'] ?? '',
-        notice: data['welcomeText'] ?? '',
-        status: data['liveStatus'] == "ON" || data['liveStatus'] == "REPLAY",
-        liveStatus: data['liveStatus'] == "ON" || data['liveStatus'] == "REPLAY" ? LiveStatus.live : LiveStatus.offline,
-        platform: Sites.huyaSite,
-        data: HuyaUrlDataModel(url: "", lines: huyaLines, bitRates: huyaBiterates, uid: "", isXingxiu: isXingxiu),
-        danmakuData: HuyaDanmakuArgs(ayyuid: data["profileInfo"]["yyid"] ?? 0, topSid: topSid, subSid: subSid),
-        link: "https://www.huya.com/$roomId",
+    try {
+      var resultText = await HttpClient.instance.getText(
+        'https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=$roomId&showSecret=1',
+        header: {
+          'Accept': '*/*',
+          'Origin': 'https://www.huya.com',
+          'Referer': 'https://www.huya.com/',
+          'Sec-Fetch-Dest': 'empty',
+          'Sec-Fetch-Mode': 'cors',
+          'Sec-Fetch-Site': 'same-site',
+          "user-agent": kUserAgent,
+          "Cookie": settings.huyaCookie.value,
+        },
       );
-    } else {
-      LiveRoom liveRoom = settings.getLiveRoomByRoomId(roomId, platform);
-      liveRoom.liveStatus = LiveStatus.offline;
-      liveRoom.status = false;
-      return liveRoom;
+      var result = json.decode(resultText);
+      if (result['status'] == 200 && result['data']['stream'] != null) {
+        dynamic data = result['data'];
+        var topSid = 0;
+        var subSid = 0;
+        var huyaLines = <HuyaLineModel>[];
+        var huyaBiterates = <HuyaBitRateModel>[];
+        //读取可用线路
+
+        var baseSteamInfoList = data['stream']['baseSteamInfoList'] as List<dynamic>;
+        var flvLines = data['stream']['flv']['multiLine'];
+        var hlsLines = data['stream']['hls']['multiLine'];
+        if (flvLines != null) {
+          for (var item in flvLines) {
+            if ((item["url"]?.toString() ?? "").isNotEmpty) {
+              var currentStream = baseSteamInfoList.firstWhere(
+                (element) => element["sCdnType"] == item["cdnType"],
+                orElse: () => null,
+              );
+              if (currentStream != null) {
+                topSid = currentStream["lChannelId"];
+                subSid = currentStream["lSubChannelId"];
+                huyaLines.add(
+                  HuyaLineModel(
+                    line: currentStream['sFlvUrl'],
+                    lineType: HuyaLineType.flv,
+                    flvAntiCode: currentStream["sFlvAntiCode"].toString(),
+                    hlsAntiCode: currentStream["sHlsAntiCode"].toString(),
+                    streamName: currentStream["sStreamName"].toString(),
+                    cdnType: item["sCdnType"].toString(),
+                  ),
+                );
+              }
+            }
+          }
+        }
+
+        if (hlsLines != null) {
+          for (var item in hlsLines) {
+            if ((item["url"]?.toString() ?? "").isNotEmpty) {
+              var currentStream = baseSteamInfoList.firstWhere(
+                (element) => element["sCdnType"] == item["cdnType"],
+                orElse: () => null,
+              );
+              if (currentStream != null) {
+                topSid = currentStream["lChannelId"];
+                subSid = currentStream["lSubChannelId"];
+                huyaLines.add(
+                  HuyaLineModel(
+                    line: currentStream['sHlsUrl'],
+                    lineType: HuyaLineType.hls,
+                    flvAntiCode: currentStream["sFlvAntiCode"].toString(),
+                    hlsAntiCode: currentStream["sHlsAntiCode"].toString(),
+                    streamName: currentStream["sStreamName"].toString(),
+                    cdnType: item["sCdnType"].toString(),
+                  ),
+                );
+              }
+            }
+          }
+        }
+        //清晰度
+        var biterates = data['liveData']['bitRateInfo'] != null
+            ? jsonDecode(data['liveData']['bitRateInfo'])
+            : data['stream']['flv']['rateArray'];
+        for (var item in biterates) {
+          var name = item["sDisplayName"].toString();
+          if (huyaBiterates.map((e) => e.name).toList().every((element) => element != name)) {
+            huyaBiterates.add(HuyaBitRateModel(bitRate: item["iBitRate"], name: name));
+          }
+        }
+        bool isXingxiu = data['liveData']['gid'] == 1663;
+        return LiveRoom(
+          cover: data['liveData']?['screenshot'] ?? '',
+          watching: data['liveData']?['userCount']?.toString() ?? '',
+          roomId: roomId,
+          area: data['liveData']?['gameFullName'] ?? '',
+          title: data['liveData']?['introduction'] ?? '',
+          nick: data['profileInfo']?['nick'] ?? '',
+          avatar: data['profileInfo']?['avatar180'] ?? '',
+          introduction: data['liveData']?['introduction'] ?? '',
+          notice: data['welcomeText'] ?? '',
+          status: data['liveStatus'] == "ON" || data['liveStatus'] == "REPLAY",
+          liveStatus:
+              data['liveStatus'] == "ON" || data['liveStatus'] == "REPLAY" ? LiveStatus.live : LiveStatus.offline,
+          platform: Sites.huyaSite,
+          data: HuyaUrlDataModel(url: "", lines: huyaLines, bitRates: huyaBiterates, uid: "", isXingxiu: isXingxiu),
+          danmakuData: HuyaDanmakuArgs(ayyuid: data["profileInfo"]["yyid"] ?? 0, topSid: topSid, subSid: subSid),
+          link: "https://www.huya.com/$roomId",
+        );
+      } else {
+        // 服务返回未开播/异常：若已有状态为直播，则保持，不做降级
+        LiveRoom exist = settings.getLiveRoomByRoomId(roomId, platform);
+        if (exist.liveStatus == LiveStatus.live || exist.status == true) {
+          return exist;
+        }
+        exist.liveStatus = LiveStatus.offline;
+        exist.status = false;
+        return exist;
+      }
+    } catch (e) {
+      // 网络/解析异常：保持原状态
+      LiveRoom exist = settings.getLiveRoomByRoomId(roomId, platform);
+      return exist;
     }
   }
 

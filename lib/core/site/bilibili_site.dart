@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:crypto/crypto.dart';
@@ -391,9 +392,8 @@ class BiliBiliSite implements LiveSite {
         ),
       );
     } catch (e) {
+      // 保持原状态，避免误判为离线
       LiveRoom liveRoom = settings.getLiveRoomByRoomId(roomId, platform);
-      liveRoom.liveStatus = LiveStatus.offline;
-      liveRoom.status = false;
       return liveRoom;
     }
   }

@@ -1,3 +1,4 @@
+
 import 'dart:math';
 import 'dart:convert';
 import 'package:get/get.dart';
@@ -259,9 +260,8 @@ class DouyuSite implements LiveSite {
       );
     } catch (e) {
       CoreLog.error(e);
+      // 保持原状态，避免误判为离线
       LiveRoom liveRoom = settings.getLiveRoomByRoomId(roomId, platform);
-      liveRoom.liveStatus = LiveStatus.offline;
-      liveRoom.status = false;
       return liveRoom;
     }
   }

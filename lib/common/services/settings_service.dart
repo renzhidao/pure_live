@@ -178,6 +178,14 @@ class SettingsService extends GetxController {
     });
   }
 
+  // 规范平台ID，解决历史数据/外部导入的别名问题
+  static String normalizePlatformId(String? platform) {
+    final p = (platform ?? '').toLowerCase().trim();
+    if (p == 'kuaishow') return 'kuaishou';
+    if (p == '网络') return Sites.iptvSite;
+    return p;
+  }
+
   // Theme settings
   static Map<String, ThemeMode> themeModes = {
     "System": ThemeMode.system,
@@ -452,24 +460,33 @@ class SettingsService extends GetxController {
       ((PrefUtil.getStringList('historyRooms') ?? []).map((e) => LiveRoom.fromJson(jsonDecode(e))).toList()).obs;
 
   bool isFavorite(LiveRoom room) {
-    return favoriteRooms.any((element) => element.roomId == room.roomId);
-  }
-
-  LiveRoom getLiveRoomByRoomId(String roomId, String platform) {
-    if (!favoriteRooms.any((element) => element.roomId == roomId) &&
-        !historyRooms.any((element) => element.roomId == roomId)) {
-      return LiveRoom(roomId: roomId, platform: platform, liveStatus: LiveStatus.unknown);
-    }
-    return favoriteRooms.firstWhere(
-      (element) => element.roomId == roomId && element.platform == platform,
-      orElse: () => historyRooms.firstWhere((element) => element.roomId == roomId && element.platform == platform),
+    final rp = normalizePlatformId(room.platform);
+    return favoriteRooms.any(
+      (element) => normalizePlatformId(element.platform) == rp && element.roomId == room.roomId,
     );
   }
 
+  LiveRoom getLiveRoomByRoomId(String roomId, String platform) {
+    final p = normalizePlatformId(platform);
+    final favIdx = favoriteRooms.indexWhere(
+      (e) => e.roomId == roomId && normalizePlatformId(e.platform) == p,
+    );
+    final hisIdx = historyRooms.indexWhere(
+      (e) => e.roomId == roomId && normalizePlatformId(e.platform) == p,
+    );
+    if (favIdx == -1 && hisIdx == -1) {
+      return LiveRoom(roomId: roomId, platform: p, liveStatus: LiveStatus.unknown);
+    }
+    if (favIdx != -1) return favoriteRooms[favIdx];
+    return historyRooms[hisIdx];
+  }
+
   bool addRoom(LiveRoom room) {
-    if (favoriteRooms.any((element) => element.roomId == room.roomId)) {
+    final rp = normalizePlatformId(room.platform);
+    if (favoriteRooms.any((e) => e.roomId == room.roomId && normalizePlatformId(e.platform) == rp)) {
       return false;
     }
+    room.platform = rp;
     favoriteRooms.add(room);
     return true;
   }
@@ -483,17 +500,21 @@ class SettingsService extends GetxController {
   }
 
   bool removeRoom(LiveRoom room) {
-    if (!favoriteRooms.any((element) => element.roomId == room.roomId)) {
-      return false;
-    }
-    favoriteRooms.remove(room);
+    final rp = normalizePlatformId(room.platform);
+    final idx = favoriteRooms.indexWhere((e) => e.roomId == room.roomId && normalizePlatformId(e.platform) == rp);
+    if (idx == -1) return false;
+    favoriteRooms.removeAt(idx);
     return true;
   }
 
   bool updateRoom(LiveRoom room) {
-    int idx = favoriteRooms.indexWhere((element) => element.roomId == room.roomId);
+    final rp = normalizePlatformId(room.platform);
+    int idx = favoriteRooms.indexWhere(
+      (element) => element.roomId == room.roomId && normalizePlatformId(element.platform) == rp,
+    );
     updateRoomInHistory(room);
     if (idx == -1) return false;
+    room.platform = rp;
     favoriteRooms[idx] = room;
     return true;
   }
@@ -503,15 +524,22 @@ class SettingsService extends GetxController {
   }
 
   bool updateRoomInHistory(LiveRoom room) {
-    int idx = historyRooms.indexWhere((element) => element.roomId == room.roomId);
+    final rp = normalizePlatformId(room.platform);
+    int idx = historyRooms.indexWhere(
+      (element) => element.roomId == room.roomId && normalizePlatformId(element.platform) == rp,
+    );
     if (idx == -1) return false;
+    room.platform = rp;
     historyRooms[idx] = room;
     return true;
   }
 
   void addRoomToHistory(LiveRoom room) {
-    if (historyRooms.any((element) => element.roomId == room.roomId)) {
-      historyRooms.remove(room);
+    final rp = normalizePlatformId(room.platform);
+    room.platform = rp;
+    final idx = historyRooms.indexWhere((e) => e.roomId == room.roomId && normalizePlatformId(e.platform) == rp);
+    if (idx != -1) {
+      historyRooms.removeAt(idx);
     }
     updateRoom(room);
     //默认只记录50条，够用了
@@ -837,7 +865,9 @@ class SettingsService extends GetxController {
 
         // 按 platform + roomId 去重
         final idx = favoriteRooms.indexWhere(
-          (e) => (e.platform ?? '').toLowerCase() == (room.platform ?? '').toLowerCase() && (e.roomId ?? '') == (room.roomId ?? ''),
+          (e) =>
+              (normalizePlatformId(e.platform)) == (normalizePlatformId(room.platform)) &&
+              (e.roomId ?? '') == (room.roomId ?? ''),
         );
 
         if (idx >= 0) {

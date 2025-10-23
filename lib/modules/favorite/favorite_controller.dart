@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'package:get/get.dart';
 import 'package:pure_live/common/index.dart';
@@ -22,7 +23,6 @@ class FavoriteController extends GetxController with GetTickerProviderStateMixin
     syncRooms();
     // 监听settings rooms变化
     debounce(settings.favoriteRooms, (rooms) => syncRooms(), time: const Duration(milliseconds: 1000));
-    // settings.favoriteRooms.listen((rooms) => syncRooms());
     onRefresh();
     tabController.addListener(() {
       tabOnlineIndex.value = tabController.index;
@@ -52,20 +52,43 @@ class FavoriteController extends GetxController with GetTickerProviderStateMixin
     onlineRooms.sort((a, b) => int.parse(b.watching!).compareTo(int.parse(a.watching!)));
   }
 
+  bool _isSupportedPlatform(String? platform) {
+    final p = SettingsService.normalizePlatformId(platform);
+    if (p.isEmpty) return false;
+    return Sites.supportSites.any((s) => s.id == p);
+  }
+
   Future<bool> onRefresh() async {
     // 如果是首次加载，则等待一秒
-    if (isFirstLoad) await Future.delayed(Duration(seconds: 1));
+    if (isFirstLoad) await Future.delayed(const Duration(seconds: 1));
 
     if (settings.favoriteRooms.value.isEmpty) return false;
 
-    var futures = settings.favoriteRooms.value
-        .where((room) => room.platform!.isNotEmpty)
-        .map((room) => Sites.of(room.platform!).liveSite.getRoomDetail(roomId: room.roomId!, platform: room.platform!))
-        .toList();
+    // 过滤无效平台/空房间，规范化平台ID（如 kuaishow -> kuaishou）
+    final targets = settings.favoriteRooms.value.where((room) {
+      final pid = SettingsService.normalizePlatformId(room.platform);
+      return (room.roomId ?? '').isNotEmpty && _isSupportedPlatform(pid);
+    }).toList();
+
+    // 分批并发请求，单批最多5个，失败时保留原状态（不强制改为离线）
     try {
-      for (int i = 0; i < futures.length; i += 5) {
+      for (int i = 0; i < targets.length; i += 5) {
+        final batch = targets.sublist(i, i + 5 > targets.length ? targets.length : i + 5);
         try {
-          List<LiveRoom> rooms = await Future.wait(futures.sublist(i, i + 5 > futures.length ? futures.length : i + 5));
+          final rooms = await Future.wait(batch.map((r) async {
+            final pid = SettingsService.normalizePlatformId(r.platform);
+            try {
+              final site = Sites.of(pid).liveSite;
+              final detail = await site.getRoomDetail(roomId: r.roomId!, platform: pid);
+              // 规范化平台字段，避免 'kuaishow' 写回失败
+              detail.platform = pid;
+              return detail;
+            } catch (e) {
+              debugPrint('Favorite refresh failed: $pid/${r.roomId} -> $e');
+              // 保持上次已知状态，避免误判为离线
+              return settings.getLiveRoomByRoomId(r.roomId!, pid);
+            }
+          }));
           for (var room in rooms) {
             try {
               settings.updateRoom(room);
@@ -82,6 +105,7 @@ class FavoriteController extends GetxController with GetTickerProviderStateMixin
       debugPrint('Error during refresh: $e');
     }
     isFirstLoad = false;
+    // UI 侧以 false 作为“刷新完成”的信号，保持兼容
     return false;
   }
 }

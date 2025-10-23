@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:dio/dio.dart';
@@ -73,7 +74,7 @@ class KuaishowSite implements LiveSite {
   final Map<String, dynamic> headers = {
     'User-Agent':
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
-    'accept':
+      'accept':
         'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
     'connection': 'keep-alive',
     'sec-ch-ua': 'Google Chrome;v=107, Chromium;v=107, Not=A?Brand;v=24',
@@ -366,9 +367,8 @@ class KuaishowSite implements LiveSite {
         data: liveStream["playUrls"],
       );
     } catch (e) {
+      // 保持原状态，避免误判为离线
       LiveRoom liveRoom = settings.getLiveRoomByRoomId(roomId, platform);
-      liveRoom.liveStatus = LiveStatus.offline;
-      liveRoom.status = false;
       return liveRoom;
     }
   }
