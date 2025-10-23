@@ -97,7 +97,6 @@ class SettingsService extends GetxController {
       PrefUtil.setString('backupDirectory', value);
     });
     
-    // ✅ 新增：监听清晰度映射变化并持久化
     roomQualityMap.listen((map) {
       PrefUtil.setString('roomQualityMap', jsonEncode(map));
     });
@@ -182,6 +181,8 @@ class SettingsService extends GetxController {
     videoHardwareDecoder.listen((value) {
       PrefUtil.setString('videoHardwareDecoder', value);
     });
+    
+    _initRoomQualityMap();
   }
 
   // Theme settings
@@ -232,12 +233,11 @@ class SettingsService extends GetxController {
     "Secondary": const Color(0xFF03DAC6),
   };
 
-  // Make a custom ColorSwatch to name map from the above custom colors.
   final Map<ColorSwatch<Object>, String> colorsNameMap = themeColors.map(
     (key, value) => MapEntry(ColorTools.createPrimarySwatch(value), key),
   );
 
-  final StopWatchTimer _stopWatchTimer = StopWatchTimer(mode: StopWatchMode.countDown); // Create instance.
+  final StopWatchTimer _stopWatchTimer = StopWatchTimer(mode: StopWatchMode.countDown);
 
   final themeColorSwitch = (PrefUtil.getString('themeColorSwitch') ?? Colors.blue.hex).obs;
 
@@ -264,7 +264,6 @@ class SettingsService extends GetxController {
 
   final enableDynamicTheme = (PrefUtil.getBool('enableDynamicTheme') ?? false).obs;
 
-  // Custom settings
   final autoRefreshTime = (PrefUtil.getInt('autoRefreshTime') ?? 3).obs;
 
   final autoShutDownTime = (PrefUtil.getInt('autoShutDownTime') ?? 120).obs;
@@ -329,7 +328,6 @@ class SettingsService extends GetxController {
 
   final preferResolution = (PrefUtil.getString('preferResolution') ?? resolutions[0]).obs;
 
-  // ✅ 新增：存储每个直播间的清晰度选择 (格式: "roomId_platform" -> qualityIndex)
   final roomQualityMap = <String, int>{}.obs;
 
   void changePreferResolution(String name) {
@@ -356,13 +354,23 @@ class SettingsService extends GetxController {
     PrefUtil.setInt('autoRefreshTime', minutes);
   }
 
-  // ✅ 新增：获取指定直播间的清晰度记忆
+  void _initRoomQualityMap() {
+    try {
+      final jsonStr = PrefUtil.getString('roomQualityMap');
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final Map<String, dynamic> decoded = jsonDecode(jsonStr);
+        roomQualityMap.value = decoded.map((key, value) => MapEntry(key, value as int));
+      }
+    } catch (e) {
+      roomQualityMap.value = {};
+    }
+  }
+
   int? getRoomQuality(String roomId, String platform) {
     final key = '${roomId}_$platform';
     return roomQualityMap[key];
   }
 
-  // ✅ 新增：保存指定直播间的清晰度选择
   void setRoomQuality(String roomId, String platform, int qualityIndex) {
     final key = '${roomId}_$platform';
     roomQualityMap[key] = qualityIndex;
@@ -463,7 +471,6 @@ class SettingsService extends GetxController {
 
   final hotAreasList = ((PrefUtil.getStringList('hotAreasList') ?? supportSites)).obs;
 
-  // Favorite rooms storage
   final favoriteRooms =
       ((PrefUtil.getStringList('favoriteRooms') ?? []).map((e) => LiveRoom.fromJson(jsonDecode(e))).toList()).obs;
 
@@ -533,15 +540,12 @@ class SettingsService extends GetxController {
       historyRooms.remove(room);
     }
     updateRoom(room);
-    //默认只记录50条，够用了
-    // 防止数据量大页面卡顿
     if (historyRooms.length > 50) {
       historyRooms.removeRange(0, historyRooms.length - 50);
     }
     historyRooms.insert(0, room);
   }
 
-  // Favorite areas storage
   final favoriteAreas =
       ((PrefUtil.getStringList('favoriteAreas') ?? []).map((e) => LiveArea.fromJson(jsonDecode(e))).toList()).obs;
 
@@ -574,7 +578,6 @@ class SettingsService extends GetxController {
     return true;
   }
 
-  // Backup & recover storage
   final backupDirectory = (PrefUtil.getString('backupDirectory') ?? '').obs;
 
   final currentWebDavConfig = (PrefUtil.getString('currentWebDavConfig') ?? '').obs;
@@ -668,13 +671,11 @@ class SettingsService extends GetxController {
         ? (json['hotAreasList'] as List).map((e) => e.toString()).toList()
         : [];
     
-    // ✅ 新增：加载清晰度映射
     if (json['roomQualityMap'] != null) {
       try {
         final Map<String, dynamic> decoded = jsonDecode(json['roomQualityMap']);
         roomQualityMap.value = decoded.map((key, value) => MapEntry(key, value as int));
       } catch (e) {
-        log('加载清晰度映射失败: $e');
         roomQualityMap.value = {};
       }
     }
@@ -750,7 +751,6 @@ class SettingsService extends GetxController {
     json['autoShutDownTime'] = autoShutDownTime.value;
     json['enableAutoShutDownTime'] = enableAutoShutDownTime.value;
 
-    // ✅ 新增：保存清晰度映射
     json['roomQualityMap'] = jsonEncode(roomQualityMap);
 
     json['enableDynamicTheme'] = enableDynamicTheme.value;

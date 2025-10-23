@@ -1,7 +1,6 @@
 dart
 import 'dart:io';
 import 'dart:async';
-import 'dart:developer';
 import 'package:get/get.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/core/site/huya_site.dart';
@@ -27,7 +26,6 @@ class LivePlayController extends StateController {
 
   final messages = <LiveMessage>[].obs;
 
-  // 控制唯一子组件
   VideoController? videoController;
 
   final LiveRoom room;
@@ -40,33 +38,25 @@ class LivePlayController extends StateController {
 
   Map<String, List<String>> liveStream = {};
 
-  /// 清晰度数据
   RxList<LivePlayQuality> qualites = RxList<LivePlayQuality>();
 
-  /// 当前清晰度
   final currentQuality = 0.obs;
 
-  /// 线路数据
   RxList<String> playUrls = RxList<String>();
 
-  /// 当前线路
   final currentLineIndex = 0.obs;
 
   int loopCount = 0;
 
   int lastExitTime = 0;
 
-  /// 双击退出Flag
   bool doubleClickExit = false;
 
-  /// 双击退出Timer
   Timer? doubleClickTimer;
 
   var isFirstLoad = true.obs;
-  // 0 代表向上 1 代表向下
   int isNextOrPrev = 0;
 
-  // 当前直播间信息 下一个频道或者上一个
   var currentPlayRoom = LiveRoom().obs;
 
   var getVideoSuccess = true.obs;
@@ -77,13 +67,11 @@ class LivePlayController extends StateController {
 
   Timer? loadRefreshRoomTimer;
 
-  // 切换线路会添加到这个数组里面
   var isLastLine = false.obs;
 
   var hasError = false.obs;
 
   var loadTimeOut = true.obs;
-  // 是否是手动切换线路
   var isActive = false.obs;
 
   var isFullScreen = false.obs;
@@ -92,7 +80,6 @@ class LivePlayController extends StateController {
 
   var closeTimeFlag = false.obs;
 
-  // 保存订阅引用以便清理
   StreamSubscription? _isFirstLoadSub;
   StreamSubscription? _isLastLineSub;
   StreamSubscription? _stopWatchEndedSub;
@@ -150,7 +137,6 @@ class LivePlayController extends StateController {
     _isLastLineSub = isLastLine.listen((p0) {
       if (isClosed) return;
       if (isLastLine.value && hasError.value && isActive.value == false) {
-        // 刷新到了最后一路线 并且有错误
         if (Get.currentRoute == '/live_play') {
           SmartDialog.showToast("当前房间无法播放,正在为您刷新直播间信息...", displayTime: const Duration(seconds: 2));
           isLastLine.value = false;
@@ -239,7 +225,6 @@ class LivePlayController extends StateController {
     } else {
       hasError.value = false;
     }
-    // active 代表用户是否手动切换路线 只有不是手动自动切换才会显示路线错误信息
     if (isLastLine.value && hasError.value && active == false) {
       restoryQualityAndLines();
       getVideoSuccess.value = false;
@@ -258,7 +243,6 @@ class LivePlayController extends StateController {
         return liveRoom;
       }
 
-      // 开始播放
       liveStatus.value = liveRoom.status! || liveRoom.isRecord!;
       if (liveStatus.value) {
         await getPlayQualites();
@@ -270,7 +254,6 @@ class LivePlayController extends StateController {
         } else {
           settings.addRoomToHistory(liveRoom);
         }
-        // start danmaku server
         List<String> except = ['kuaishou', 'iptv', 'cc'];
         if (except.indexWhere((element) => element == liveRoom.platform!) == -1) {
           liveDanmaku.stop();
@@ -308,14 +291,12 @@ class LivePlayController extends StateController {
     videoController = null;
     liveDanmaku.stop();
 
-    // 清除 liveDanmaku 回调，防止内存泄漏
     liveDanmaku.onMessage = null;
     liveDanmaku.onClose = null;
     liveDanmaku.onReady = null;
 
     success.value = false;
 
-    // 清理所有 Timer
     doubleClickTimer?.cancel();
     channelTimer?.cancel();
     loadRefreshRoomTimer?.cancel();
@@ -354,7 +335,6 @@ class LivePlayController extends StateController {
     messages.add(msg);
   }
 
-  /// 初始化弹幕接收事件
   void initDanmau() {
     if (detail.value!.isRecord!) {
       _addMessage(
@@ -394,7 +374,6 @@ class LivePlayController extends StateController {
     };
   }
 
-  // ✅ 修改：用户手动切换清晰度时保存选择
   Future<void> setResolution(String quality, String index) async {
     if (videoController != null && !videoController!.hasDestory) {
       await videoController!.destory();
@@ -402,14 +381,12 @@ class LivePlayController extends StateController {
     currentQuality.value = qualites.map((e) => e.quality).toList().indexWhere((e) => e == quality);
     currentLineIndex.value = int.tryParse(index) ?? 0;
     
-    // ✅ 保存用户的清晰度选择到记忆
     if (currentPlayRoom.value.roomId != null && currentPlayRoom.value.platform != null) {
       settings.setRoomQuality(
         currentPlayRoom.value.roomId!,
         currentPlayRoom.value.platform!,
         currentQuality.value,
       );
-      log('已保存直播间清晰度: ${currentPlayRoom.value.roomId}_${currentPlayRoom.value.platform} -> $currentQuality');
     }
     
     await onInitPlayerState(
@@ -420,7 +397,6 @@ class LivePlayController extends StateController {
     );
   }
 
-  /// 初始化播放器
   Future<void> getPlayQualites() async {
     try {
       var playQualites = await currentSite.liveSite.getPlayQualites(detail: detail.value!);
@@ -436,40 +412,30 @@ class LivePlayController extends StateController {
       }
       qualites.value = playQualites;
       
-      // ✅ 修改：优先使用直播间记忆的清晰度
       if (isFirstLoad.value) {
-        // 尝试获取该直播间的记忆清晰度
         int? savedQuality = settings.getRoomQuality(
           currentPlayRoom.value.roomId!,
           currentPlayRoom.value.platform!,
         );
         
         if (savedQuality != null && savedQuality < playQualites.length) {
-          // 使用记忆的清晰度
           currentQuality.value = savedQuality;
-          log('使用记忆清晰度: ${currentPlayRoom.value.roomId}_${currentPlayRoom.value.platform} -> $savedQuality');
         } else {
-          // 没有记忆，使用全局设置
           int qualityLevel = settings.resolutionsList.indexOf(settings.preferResolution.value);
           if (qualityLevel == 0) {
-            //最高
             currentQuality.value = 0;
           } else if (qualityLevel == settings.resolutionsList.length - 1) {
-            //最低
             currentQuality.value = playQualites.length - 1;
           } else {
-            //中间值
             int middle = (playQualites.length / 2).floor();
             currentQuality.value = middle;
           }
-          log('使用默认清晰度策略: $qualityLevel -> ${currentQuality.value}');
         }
       }
       isFirstLoad.value = false;
       getPlayUrl();
     } catch (e) {
       if (isClosed) return;
-      log(e.toString());
       SmartDialog.showToast("无法读取视频信息,请重新获取");
       getVideoSuccess.value = false;
       isFirstLoad.value = false;
@@ -527,11 +493,6 @@ class LivePlayController extends StateController {
 
     if (isClosed) return;
 
-    log(
-      (currentSite.id == Sites.huyaSite && settings.videoPlayerIndex.value == 1 ? 0 : settings.videoPlayerIndex.value)
-          .toString(),
-      name: "video_player_index",
-    );
     videoController = VideoController(
       room: detail.value!,
       datasourceType: 'network',
@@ -577,7 +538,6 @@ class LivePlayController extends StateController {
           "douyulink://?type=90001&schemeUrl=douyuapp%3A%2F%2Froom%3FliveType%3D0%26rid%3D${detail.value?.roomId}";
       webUrl = "https://www.douyu.com/${detail.value?.roomId}";
     } else if (site == Sites.ccSite) {
-      log(detail.value!.userId.toString(), name: "cc_user_id");
       naviteUrl = "cc://join-room/${detail.value?.roomId}/${detail.value?.userId}/";
       webUrl = "https://cc.163.com/${detail.value?.roomId}";
     } else if (site == Sites.kuaishouSite) {
