@@ -635,7 +635,7 @@ class BottomActionBar extends StatelessWidget {
               FavoriteButton(controller: controller),
               DanmakuButton(controller: controller),
               SettingsButton(controller: controller),
-              DanmakuAreaButton(controller: controller),
+              DanmakuAreaButton(),
               const Spacer(),
               VideoFitSetting(controller: controller),
               SizedBox(width: 8),
@@ -1073,15 +1073,14 @@ class DanmakuSetting extends StatelessWidget {
 
 
 class DanmakuAreaButton extends StatelessWidget {
-  const DanmakuAreaButton({super.key, required this.controller});
-  final LivePlayController controller;
+  const DanmakuAreaButton({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Obx(() => IconButton(
-          onPressed: () => SettingsService.to.showDanmakuArea.toggle(),
+          onPressed: () => Get.find<SettingsService>().showDanmakuArea.toggle(),
           icon: Icon(
-            SettingsService.to.showDanmakuArea.value
+            Get.find<SettingsService>().showDanmakuArea.value
                 ? Icons.subtitles_rounded
                 : Icons.subtitles_off_rounded,
             color: Colors.white,
