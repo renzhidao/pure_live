@@ -635,6 +635,7 @@ class BottomActionBar extends StatelessWidget {
               FavoriteButton(controller: controller),
               DanmakuButton(controller: controller),
               SettingsButton(controller: controller),
+              DanmakuAreaButton(controller: controller),
               const Spacer(),
               VideoFitSetting(controller: controller),
               SizedBox(width: 8),
@@ -1067,5 +1068,25 @@ class DanmakuSetting extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+
+class DanmakuAreaButton extends StatelessWidget {
+  const DanmakuAreaButton({super.key, required this.controller});
+  final LivePlayController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() => IconButton(
+          onPressed: () => SettingsService.to.showDanmakuArea.toggle(),
+          icon: Icon(
+            SettingsService.to.showDanmakuArea.value
+                ? Icons.subtitles_rounded
+                : Icons.subtitles_off_rounded,
+            color: Colors.white,
+          ),
+          tooltip: '弹幕区域显示',
+        ));
   }
 }

@@ -1,0 +1,71 @@
+name: Build v8a Release APK (Fixed)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android-release-v8a:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: ✅ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ✅ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: "17"
+          cache: 'gradle'
+
+      - name: ✅ Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: ✅ Create Signing Configuration
+        run: |
+          KEYSTORE_FILE="${GITHUB_WORKSPACE}/android/app/upload-keystore.jks"
+          
+          keytool -genkey -v \
+            -keystore "${KEYSTORE_FILE}" \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias upload \
+            -storepass android \
+            -keypass android \
+            -dname "CN=GitHub Actions, OU=CI, O=PureLive, L=Cloud, S=Auto, C=US"
+          
+          cat > android/key.properties << EOF
+          storeFile=${KEYSTORE_FILE}
+          storePassword=android
+          keyPassword=android
+          keyAlias=upload
+          EOF
+          
+          echo "✅ Keystore created at: ${KEYSTORE_FILE}"
+          ls -lh "${KEYSTORE_FILE}"
+
+      - name: ✅ Get Dependencies
+        run: flutter pub get
+
+      # 🔥 关键修复：加上 --split-per-abi
+      - name: ✅ Build Split APKs
+        run: |
+          flutter build apk --release \
+            --split-per-abi \
+            --build-name=1.0.0 \
+            --build-number=$((GITHUB_RUN_NUMBER + 10))
+
+      - name: ✅ Verify APKs
+        run: |
+          echo "📦 Generated APK files:"
+          ls -lh build/app/outputs/flutter-apk/*.apk
+
+      # 🎯 只上传 v8a 版本
+      - name: 📦 Upload arm64-v8a APK Only
+        uses: actions/upload-artifact@v4
+        with:
+          name: pure-live-arm64-v8a-release
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if-no-files-found: error

@@ -135,7 +135,7 @@ class LivePlayPage extends GetView<LivePlayController> {
                             if (controller.success.value == false) {
                               return SizedBox.shrink();
                             }
-                            return Expanded(child: DanmakuTabView());
+                            return Expanded(child: Obx(() => SettingsService.to.showDanmakuArea.value ? DanmakuTabView() : Container()));
                           }),
                         ],
                       )
@@ -152,7 +152,7 @@ class LivePlayPage extends GetView<LivePlayController> {
                                   if (controller.success.value == false) {
                                     return SizedBox.shrink();
                                   }
-                                  return Expanded(child: DanmakuTabView());
+                                  return Expanded(child: Obx(() => SettingsService.to.showDanmakuArea.value ? DanmakuTabView() : Container()));
                                 }),
                               ],
                             ),

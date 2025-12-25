@@ -63,6 +63,7 @@ class SettingsService extends GetxController {
   final danmakuArea = (HivePrefUtil.getDouble('danmakuArea') ?? 1.0).obs;
   final danmakuBottomArea = (HivePrefUtil.getDouble('danmakuBottomArea') ?? 0.5).obs;
   final danmakuSpeed = (HivePrefUtil.getDouble('danmakuSpeed') ?? 8.0).obs;
+  final showDanmakuArea = (HivePrefUtil.getBool('showDanmakuArea') ?? true).obs;
   final danmakuFontSize = (HivePrefUtil.getDouble('danmakuFontSize') ?? 16.0).obs;
   final danmakuFontBorder = (HivePrefUtil.getDouble('danmakuFontBorder') ?? 4.0).obs;
   final danmakuOpacity = (HivePrefUtil.getDouble('danmakuOpacity') ?? 1.0).obs;
@@ -129,6 +130,7 @@ class SettingsService extends GetxController {
     });
 
     // === 监听并持久化 ===
+    showDanmakuArea.listen((bool value) => HivePrefUtil.setBool('showDanmakuArea', value));
     enableDynamicTheme.listen((bool value) {
       HivePrefUtil.setBool('enableDynamicTheme', value);
       update(['myapp']);
