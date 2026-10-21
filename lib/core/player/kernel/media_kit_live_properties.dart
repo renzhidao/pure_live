@@ -60,7 +60,7 @@ abstract final class MediaKitLiveProperties {
       'protocol_whitelist': 'httpproxy,udp,rtp,tcp,tls,data,file,http,https,crypto,rtmp,rtmps,rtsp,srt',
       'demuxer-lavf-probesize': '65536',
       'demuxer-lavf-analyzeduration': '0.1',
-      'demuxer-lavf-o': 'fflags=nobuffer+fastseek+flush_packets',
+      'demuxer-lavf-o': 'fflags=nobuffer,allowed_extensions=ALL',
       'vd-lavc-o': 'flags=low_delay',
       'network-timeout': '8',
       // Drop a failing hw decoder after one bad frame.
@@ -80,7 +80,6 @@ abstract final class MediaKitLiveProperties {
       'demuxer-thread': 'yes',
       // Drop late frames instead of stacking lag.
       'framedrop': 'decoder+vo',
-      'untimed': 'yes',
     };
 
     if (_lowEnd) {
@@ -294,7 +293,6 @@ abstract final class MediaKitLiveProperties {
       await platform.setProperty('cache', 'no');
       await platform.setProperty('demuxer-readahead-secs', '0');
       await platform.setProperty('framedrop', 'decoder+vo');
-      await platform.setProperty('untimed', 'yes');
       await platform.setProperty('speed', '1.25');
       realtimeSpeed.value = 1.25;
       Future<void>.delayed(const Duration(milliseconds: 650), () async {
