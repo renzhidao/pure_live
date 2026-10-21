@@ -774,13 +774,11 @@ class DouyinSite
         _addPlayableUrl(urls, main['flv']);
       }
       _addPlayableUrl(urls, _caseInsensitiveMapValue(flvMap, key));
-      // 仅在完全没有 FLV 低延迟直链时，才回退使用高延迟的 HLS (.m3u8) 分片流
-      if (urls.isEmpty) {
-        if (main is Map) {
-          _addPlayableUrl(urls, main['hls']);
-        }
-        _addPlayableUrl(urls, _caseInsensitiveMapValue(hlsMap, key));
+      // 优先使用 FLV 低延迟直链，并将 HLS (.m3u8) 分片流追加在列表末尾作为自动兜底备用源
+      if (main is Map) {
+        _addPlayableUrl(urls, main['hls']);
       }
+      _addPlayableUrl(urls, _caseInsensitiveMapValue(hlsMap, key));
       if (urls.isEmpty) continue;
       // Douyin may publish an `ao` entry beside its video renditions. It is
       // an audio-only pull URL (`only_audio=1`), not a selectable video
