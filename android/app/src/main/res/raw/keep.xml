@@ -1,3 +1,3 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/audio_service_pause,@drawable/audio_service_play_arrow,@drawable/audio_service_stop" />
+    tools:keep="@drawable/audio_service_pause,@drawable/audio_service_play_arrow,@drawable/audio_service_stop,@drawable/ic_media_play,@drawable/ic_media_pause,@drawable/ic_media_stop,@drawable/ic_media_previous,@drawable/ic_media_next,@drawable/ic_media_rewind,@drawable/ic_media_forward,@drawable/ic_launcher_foreground,@mipmap/ic_launcher" />
