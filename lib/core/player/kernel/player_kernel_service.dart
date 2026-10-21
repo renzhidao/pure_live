@@ -59,9 +59,10 @@ class PlayerKernelService {
       );
 
     if (PlayerConsts.mobileOnlyEnginesAvailable(defaultTargetPlatform)) {
-      kernel
-        ..registerBackend(const FlvLzcPlayerAdapterFactory().registration())
-        ..registerBackend(const BetterPlayerAdapterFactory().registration());
+      kernel.registerBackend(const BetterPlayerAdapterFactory().registration());
+      if (defaultTargetPlatform != TargetPlatform.android) {
+        kernel.registerBackend(const FlvLzcPlayerAdapterFactory().registration());
+      }
     }
 
     kernel.attachPresentation(

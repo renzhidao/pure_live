@@ -105,7 +105,9 @@ class AppInitializer {
     // The ingest pipelines remux a source FFmpeg understands better than the
     // player does; they run on the recorder's FFmpegKit build instead of linking
     // a second runtime.
-    configureIngestFfmpegStarter(ffmpegKitIngestStarter);
+    if (!Platform.isAndroid) {
+      configureIngestFfmpegStarter(ffmpegKitIngestStarter);
+    }
     // The player hands its candidate sources to this interceptor before opening
     // them, so a line the engine cannot parse is remuxed over loopback instead of
     // failing. Registered here rather than in the domain: the domain only knows

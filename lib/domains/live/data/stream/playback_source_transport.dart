@@ -233,13 +233,14 @@ class PlaybackSourceTransport {
       final String? rootManifest = decision.rootManifest;
       return (_) => _createIngestRelay(url, frozen, rootManifest: rootManifest);
     }
+    // Prefer the zero-latency Dart FLV tag rewriter for known CDNs (e.g. Douyin
+    // and 17LIVE) instead of HLS segment remuxing via FFmpegKit.
+    if (FlvLegacyHevcRelay.appliesTo(url)) return (_) => _createLegacyHevcRelay(url, frozen);
     if (ingestFfmpegAvailable) {
       // The player's own FFmpeg cannot parse this container (codec-id-12 HEVC
       // inside FLV), so a local FFmpeg remuxes it into a loopback HLS tree.
       return (_) => _createFfmpegRelay(url, frozen);
     }
-    // Without an FFmpeg runtime the Dart tag rewriter still covers known CDNs.
-    if (FlvLegacyHevcRelay.appliesTo(url)) return (_) => _createLegacyHevcRelay(url, frozen);
     return null;
   }
 
