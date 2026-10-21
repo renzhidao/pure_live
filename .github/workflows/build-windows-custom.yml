@@ -1,0 +1,107 @@
+name: Build Windows PC Release (Zero-Latency Custom)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master", "main" ]
+
+env:
+  FASTFORGE_VERSION: "0.6.12"
+
+jobs:
+  build-windows-release:
+    name: Windows PC EXE + Portable ZIP (Zero-Latency)
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: ✅ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: ✅ Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: ✅ Resolve Packages
+        run: flutter pub get --enforce-lockfile
+
+      - name: ✅ Prefetch Verified Firebase C++ SDK
+        shell: pwsh
+        run: .\tool\prefetch_windows_native.ps1
+
+      - name: ✅ Generate Production AppConfig
+        shell: pwsh
+        run: |
+          dart run enven `
+            --env-files .env,.env.prod `
+            --class-name AppConfig
+
+      - name: ✅ Install Windows Packagers (InnoSetup + Fastforge)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          choco install innosetup --version=6.7.1 -y --no-progress
+          dart pub global activate fastforge $env:FASTFORGE_VERSION
+
+      - name: ✅ Copy Chinese Language Pack
+        shell: pwsh
+        run: |
+          $source = "windows\packaging\exe\ChineseSimplified.isl"
+          $target = "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"
+          if (Test-Path $source) {
+            Copy-Item $source $target -Force
+          }
+
+      - uses: ./.github/actions/get-version
+        id: version
+
+      - name: ✅ Build & Package Windows EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          fastforge package `
+            --platform windows `
+            --targets exe
+
+      - name: ✅ Create Windows Portable ZIP & Rename EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ steps.version.outputs.artifact_version }}"
+          $bundle = "build\windows\x64\runner\Release"
+          if (!(Test-Path $bundle -PathType Container)) {
+            Write-Error "Windows release bundle not found: $bundle"
+          }
+
+          $portable = "PureLive-$version-ZeroLatency-windows-x64-portable.zip"
+          $temporary = Join-Path $env:RUNNER_TEMP "pure-live-portable"
+          Remove-Item $temporary -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $temporary -Force | Out-Null
+          Get-ChildItem $bundle -Force |
+            Where-Object {
+              $_.Name -notin @("AppData", "IPTV_CACHE")
+            } |
+            Copy-Item -Destination $temporary -Recurse -Force
+
+          Compress-Archive `
+            -Path (Join-Path $temporary "*") `
+            -DestinationPath $portable `
+            -CompressionLevel Optimal `
+            -Force
+
+          $exeFile = Get-ChildItem "dist" -Recurse -Filter "*.exe" | Select-Object -First 1
+          if ($exeFile) {
+            Copy-Item $exeFile.FullName "PureLive-$version-ZeroLatency-windows-x64-setup.exe" -Force
+          }
+          Get-ChildItem "PureLive-*-ZeroLatency-windows-x64*" | Format-Table Name, Length
+
+      - name: 📦 Upload Windows PC Artifacts (EXE + Portable ZIP)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pure-live-windows-x64-zero-latency-release
+          path: |
+            PureLive-*-ZeroLatency-windows-x64-setup.exe
+            PureLive-*-ZeroLatency-windows-x64-portable.zip
+          if-no-files-found: error

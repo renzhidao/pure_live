@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [ "master", "main" ]
+    paths-ignore:
+      - '.github/workflows/build-windows-custom.yml'
 
 jobs:
   build-android-release-v8a:
