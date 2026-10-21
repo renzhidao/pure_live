@@ -144,10 +144,6 @@ class AppInitializer {
       await MobileManager.initialize();
     }
 
-    if (PlatformUtils.isDesktopNotMac && instanceId.isEmpty) {
-      _setupLaunchAtStartupSafe();
-    }
-
     _isInitialized = true;
   }
 
@@ -160,7 +156,7 @@ class AppInitializer {
   }
 
   @visibleForTesting
-  static bool shouldStartRecorderPrewarmImmediately({required bool mobile}) => mobile;
+  static bool shouldStartRecorderPrewarmImmediately({required bool mobile}) => false;
 
   Future<void> _initWindowsSingleInstance(List<String> args, String instanceId) async {
     if (!Platform.isWindows) return;

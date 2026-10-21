@@ -52,10 +52,22 @@ extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
         // succeed on devices where the recording engine cannot be loaded.
         minSdk = 26
         multiDexEnabled = true 
-        targetSdk = 37
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["appLabel"] = "纯粹直播"
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            excludes += listOf(
+                "**/libffmpegkit*.so",
+                "**/libijkffmpeg.so",
+                "**/libijkplayer.so",
+                "**/libijksdl.so",
+            )
+        }
     }
 
     signingConfigs {

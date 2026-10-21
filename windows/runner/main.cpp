@@ -17,6 +17,51 @@ constexpr wchar_t kPrimaryInstanceMutex[] =
 // the in-app title bar is drawn by Flutter. Escaped to keep the source ASCII.
 constexpr wchar_t kWindowTitle[] = L"\u7EAF\u7CB9\u76F4\u64AD";
 
+void EnsureDirectoryExists(const std::wstring& path) {
+  ::CreateDirectoryW(path.c_str(), nullptr);
+}
+
+void SetPortableEnvVar(const wchar_t* name, const std::wstring& value) {
+  ::SetEnvironmentVariableW(name, value.c_str());
+  _wputenv_s(name, value.c_str());
+}
+
+// Force all C/C++ runtimes, Win32 temp APIs, WebView2, libmpv, FFmpeg, and
+// Dart isolates to store 100% of their files inside <exe_dir>\AppData.
+void ConfigurePortableEnvironment() {
+  wchar_t exe_path[MAX_PATH] = {0};
+  DWORD len = ::GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
+  if (len == 0 || len >= MAX_PATH) {
+    return;
+  }
+  std::wstring exe_dir(exe_path, len);
+  size_t last_slash = exe_dir.find_last_of(L"\\/");
+  if (last_slash == std::wstring::npos) {
+    return;
+  }
+  exe_dir = exe_dir.substr(0, last_slash);
+
+  const std::wstring app_data_root = exe_dir + L"\\AppData";
+  const std::wstring roaming_dir = app_data_root + L"\\Roaming";
+  const std::wstring local_dir = app_data_root + L"\\Local";
+  const std::wstring temp_dir = app_data_root + L"\\TEMP";
+  const std::wstring webview2_dir = app_data_root + L"\\WebView2";
+
+  EnsureDirectoryExists(app_data_root);
+  EnsureDirectoryExists(roaming_dir);
+  EnsureDirectoryExists(local_dir);
+  EnsureDirectoryExists(temp_dir);
+  EnsureDirectoryExists(webview2_dir);
+
+  SetPortableEnvVar(L"APPDATA", roaming_dir);
+  SetPortableEnvVar(L"LOCALAPPDATA", local_dir);
+  SetPortableEnvVar(L"TEMP", temp_dir);
+  SetPortableEnvVar(L"TMP", temp_dir);
+  SetPortableEnvVar(L"USERPROFILE", app_data_root);
+  SetPortableEnvVar(L"HOME", app_data_root);
+  SetPortableEnvVar(L"WEBVIEW2_USER_DATA_FOLDER", webview2_dir);
+}
+
 void BringPrimaryWindowToFront() {
   const HWND window =
       ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", kWindowTitle);
@@ -37,6 +82,8 @@ void BringPrimaryWindowToFront() {
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  ConfigurePortableEnvironment();
+
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
 

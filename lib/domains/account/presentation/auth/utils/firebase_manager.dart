@@ -87,38 +87,8 @@ class FirebaseManager {
   }
 
   Future<void> registerWindowsCustomScheme(String scheme, {String? description}) async {
-    if (!Platform.isWindows || scheme.trim().isEmpty) {
-      return;
-    }
-
-    RegistryKey? schemeKey;
-    RegistryKey? commandKey;
-
-    try {
-      final exePath = Platform.resolvedExecutable;
-      final basePath = r'Software\Classes\' + scheme;
-      final commandPath = '$basePath\\shell\\open\\command';
-      final command = '"$exePath" "%1"';
-
-      schemeKey = CURRENT_USER.create(basePath);
-      commandKey = CURRENT_USER.create(commandPath);
-
-      final currentCommandValue = commandKey.getValue('');
-      if (currentCommandValue is StringValue && currentCommandValue.value == command) {
-        return;
-      }
-
-      schemeKey.setValue('', RegistryValue.string(description ?? 'URL:$scheme Protocol'));
-      schemeKey.setValue('URL Protocol', const RegistryValue.string(''));
-      commandKey.setValue('', RegistryValue.string(command));
-
-      debugPrint('[Protocol Registry] Registered $scheme://');
-    } catch (e, s) {
-      debugPrint('[Protocol Registry] Failed: $e\n$s');
-    } finally {
-      schemeKey?.close();
-      commandKey?.close();
-    }
+    // Portable mode: do not write URL protocol keys into Windows Registry.
+    return;
   }
 
   Future<void> signOut() async {

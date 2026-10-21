@@ -5,12 +5,9 @@ on:
   push:
     branches: [ "master", "main" ]
 
-env:
-  FASTFORGE_VERSION: "0.6.12"
-
 jobs:
-  build-windows-release:
-    name: Windows PC EXE + Portable ZIP (Zero-Latency)
+  build-windows-portable:
+    name: Windows PC Pure Green Portable ZIP (Zero-Latency)
     runs-on: windows-latest
     timeout-minutes: 40
 
@@ -38,34 +35,16 @@ jobs:
             --env-files .env,.env.prod `
             --class-name AppConfig
 
-      - name: ✅ Install Windows Packagers (InnoSetup + Fastforge)
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          choco install innosetup --version=6.7.1 -y --no-progress
-          dart pub global activate fastforge $env:FASTFORGE_VERSION
-
-      - name: ✅ Copy Chinese Language Pack
-        shell: pwsh
-        run: |
-          $source = "windows\packaging\exe\ChineseSimplified.isl"
-          $target = "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"
-          if (Test-Path $source) {
-            Copy-Item $source $target -Force
-          }
-
       - uses: ./.github/actions/get-version
         id: version
 
-      - name: ✅ Build & Package Windows EXE
+      - name: ✅ Build Windows x64 Portable Release
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          fastforge package `
-            --platform windows `
-            --targets exe
+          flutter build windows --release
 
-      - name: ✅ Create Windows Portable ZIP & Rename EXE
+      - name: ✅ Package Pure Green Portable ZIP (Self-Contained AppData)
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -76,14 +55,22 @@ jobs:
           }
 
           $portable = "PureLive-$version-ZeroLatency-windows-x64-portable.zip"
-          $temporary = Join-Path $env:RUNNER_TEMP "pure-live-portable"
+          $temporary = Join-Path $env:RUNNER_TEMP "PureLive-Portable"
           Remove-Item $temporary -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $temporary -Force | Out-Null
+
           Get-ChildItem $bundle -Force |
             Where-Object {
               $_.Name -notin @("AppData", "IPTV_CACHE")
             } |
             Copy-Item -Destination $temporary -Recurse -Force
+
+          # Pre-create the local AppData structure inside the portable folder
+          $localAppData = Join-Path $temporary "AppData"
+          New-Item -ItemType Directory -Path (Join-Path $localAppData "Roaming") -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $localAppData "Local") -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $localAppData "TEMP") -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $localAppData "WebView2") -Force | Out-Null
 
           Compress-Archive `
             -Path (Join-Path $temporary "*") `
@@ -91,17 +78,11 @@ jobs:
             -CompressionLevel Optimal `
             -Force
 
-          $exeFile = Get-ChildItem "dist" -Recurse -Filter "*.exe" | Select-Object -First 1
-          if ($exeFile) {
-            Copy-Item $exeFile.FullName "PureLive-$version-ZeroLatency-windows-x64-setup.exe" -Force
-          }
-          Get-ChildItem "PureLive-*-ZeroLatency-windows-x64*" | Format-Table Name, Length
+          Get-ChildItem $portable | Format-Table Name, Length
 
-      - name: 📦 Upload Windows PC Artifacts (EXE + Portable ZIP)
+      - name: 📦 Upload Windows PC Pure Portable ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: pure-live-windows-x64-zero-latency-release
-          path: |
-            PureLive-*-ZeroLatency-windows-x64-setup.exe
-            PureLive-*-ZeroLatency-windows-x64-portable.zip
+          name: pure-live-windows-x64-zero-latency-portable
+          path: PureLive-*-ZeroLatency-windows-x64-portable.zip
           if-no-files-found: error

@@ -56,16 +56,31 @@ class AppPathManager {
     final sanitizedInstanceId = WindowsMultiInstanceLauncher.sanitizeInstanceId(instanceId);
 
     final originalPathProvider = PathProviderPlatform.instance;
-    final appDir = await getApplicationDocumentsDirectory();
-    final supportDir = await getApplicationSupportDirectory();
-    final cacheDir = await getApplicationCacheDirectory();
 
     var rootPath = '';
     if (kIsWeb) {
       rootPath = softNameDir;
     } else if (Platform.isWindows) {
-      rootPath = await _selectWindowsDataRoot(supportDir);
+      // Strictly keep all Windows portable data inside <exe_dir>\AppData
+      // without ever querying or creating directories in C:\Users\...\AppData
+      // or Documents, and without scanning the Windows Registry.
+      final exeDir = p.dirname(Platform.resolvedExecutable);
+      rootPath = p.join(exeDir, dirAppData);
+      if (sanitizedInstanceId.isNotEmpty) {
+        rootPath = p.join(rootPath, sanitizedInstanceId);
+      }
+      await Directory(rootPath).create(recursive: true);
+      _basePath = rootPath;
+      _legacyHiveFiles = const [];
+
+      PathProviderPlatform.instance = WindowsPortablePathProvider(
+        delegate: originalPathProvider,
+        dataRoot: rootPath,
+      );
+      configureWindowsPortableSharedPreferences(rootPath);
+      return;
     } else {
+      final appDir = await getApplicationDocumentsDirectory();
       rootPath = p.join(appDir.path, softNameDir);
     }
 
@@ -74,27 +89,6 @@ class AppPathManager {
     }
     await Directory(rootPath).create(recursive: true);
     _basePath = rootPath;
-
-    if (!kIsWeb && Platform.isWindows) {
-      final legacyRoots = await _discoverWindowsLegacyRoots(
-        appDir: appDir,
-        supportDir: supportDir,
-        cacheDir: cacheDir,
-        instanceId: sanitizedInstanceId,
-      );
-      _legacyHiveFiles = await _findLegacyHiveFiles(roots: legacyRoots, targetRoot: rootPath);
-      await _createMigrationBackups(_legacyHiveFiles);
-      await _recoverMissingPersistentData(legacyRoots);
-      await _recoverLegacyPluginPreferences(supportDir);
-
-      // Portable/EXE builds keep plugin support, cache and temporary state
-      // beside the executable. MSIX already receives a writable package data
-      // root from the system path provider and must retain that provider.
-      if (!_isWindowsMsix) {
-        PathProviderPlatform.instance = WindowsPortablePathProvider(delegate: originalPathProvider, dataRoot: rootPath);
-        configureWindowsPortableSharedPreferences(rootPath);
-      }
-    }
   }
 
   Future<String> _selectWindowsDataRoot(Directory supportDir) async {

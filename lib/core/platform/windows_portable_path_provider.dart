@@ -40,17 +40,18 @@ class WindowsPortablePathProvider extends PathProviderPlatform {
   Future<String?> getApplicationCachePath() => _localDirectory('CACHE');
 
   @override
-  Future<String?> getExternalStoragePath() => delegate.getExternalStoragePath();
+  Future<String?> getExternalStoragePath() => _localDirectory('EXTERNAL');
 
   @override
-  Future<List<String>?> getExternalCachePaths() => delegate.getExternalCachePaths();
+  Future<List<String>?> getExternalCachePaths() async =>
+      <String>[await _localDirectory('CACHE')];
 
   @override
-  Future<List<String>?> getExternalStoragePaths({StorageDirectory? type}) =>
-      delegate.getExternalStoragePaths(type: type);
+  Future<List<String>?> getExternalStoragePaths({StorageDirectory? type}) async =>
+      <String>[await _localDirectory('EXTERNAL')];
 
   @override
-  Future<String?> getDownloadsPath() => delegate.getDownloadsPath();
+  Future<String?> getDownloadsPath() => _localDirectory('DOWNLOADS');
 }
 
 /// The Windows shared_preferences plugin constructs PathProviderWindows
