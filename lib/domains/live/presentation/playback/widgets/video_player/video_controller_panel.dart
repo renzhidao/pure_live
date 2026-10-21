@@ -6,6 +6,7 @@ import 'package:pure_live/core/index.dart';
 import 'package:pure_live/core/utils/event_bus.dart';
 import 'package:pure_live/core/platform/platform_utils.dart';
 import 'package:pure_live/core/utils/live_quality_label.dart';
+import 'package:pure_live/core/player/kernel/media_kit_live_properties.dart';
 import 'package:pure_live/domains/live/data/platforms/sites.dart';
 import 'package:pure_live/core/player/core/portrait_stream_support.dart';
 import 'package:pure_live/domains/live/domain/global_player_service.dart';
@@ -329,6 +330,7 @@ class _VideoControllerPanelState extends State<VideoControllerPanel> {
                 ),
                 LockButton(controller: controller),
                 const PortraitStreamDiagnosticsBadge(),
+                RealtimeLatencyFloatingBadge(controller: controller),
                 TopActionBar(
                   controller: controller,
                   barHeight: barHeight,
@@ -1416,6 +1418,8 @@ class BottomActionBar extends StatelessWidget {
             },
           ),
         ],
+        const DanmakuAreaButton(),
+        RealtimeLatencyButton(controller: controller),
       ],
     );
   }
@@ -1957,5 +1961,162 @@ class SettingsPanel extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// 迁移自旧分支：底部弹幕列表区域显示/隐藏切换按钮
+class DanmakuAreaButton extends StatelessWidget {
+  const DanmakuAreaButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(
+      () => IconButton(
+        key: const ValueKey('danmaku-area-toggle-button'),
+        onPressed: () => SettingsService.to.danmaku.showDanmakuArea.toggle(),
+        icon: Icon(
+          SettingsService.to.danmaku.showDanmakuArea.v
+              ? Icons.subtitles_rounded
+              : Icons.subtitles_off_rounded,
+          color: Colors.white,
+        ),
+        tooltip: '弹幕区域显示',
+      ),
+    );
+  }
+}
+
+/// 播放器控制栏内的「实时缓冲延迟显示 + 一键极限追帧」按钮
+/// - 单击：立即排空 mpv 缓冲区并触发 1.25x 瞬时追帧至实时边缘
+/// - 长按：开关画面右上角的常驻实时延迟悬浮窗
+class RealtimeLatencyButton extends StatelessWidget {
+  const RealtimeLatencyButton({super.key, required this.controller});
+
+  final VideoController controller;
+
+  Color _latencyColor(int ms) {
+    if (ms <= 120) return const Color(0xFF4ADE80); // 极速绿 (<120ms)
+    if (ms <= 350) return const Color(0xFFFACC15); // 轻度缓冲黄
+    return const Color(0xFFF87171); // 积压告警红
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final ms = MediaKitLiveProperties.realtimeBufferMs.value;
+      final speed = MediaKitLiveProperties.realtimeSpeed.value;
+      final color = _latencyColor(ms);
+      final speedTag = speed > 1.01 ? ' 🚀${speed.toStringAsFixed(2)}x' : '';
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Tooltip(
+          message: '单击：一键极限追帧 | 长按：开关常驻延迟悬浮窗',
+          child: Material(
+            color: Colors.black54,
+            shape: StadiumBorder(side: BorderSide(color: color.withValues(alpha: 0.85), width: 1.1)),
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: () async {
+                controller.enableController();
+                final afterMs = await MediaKitLiveProperties.flushLatencyNow();
+                ToastUtil.show('⚡ 已执行极限追帧 (当前缓冲: ${afterMs}ms)');
+              },
+              onLongPress: () {
+                controller.enableController();
+                MediaKitLiveProperties.showFloatingLatencyBadge.toggle();
+                final on = MediaKitLiveProperties.showFloatingLatencyBadge.value;
+                ToastUtil.show(on ? '已开启画面常驻实时延迟显示' : '已关闭画面常驻实时延迟显示');
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt_rounded, size: 15, color: color),
+                    const SizedBox(width: 2),
+                    Text(
+                      '${ms}ms$speedTag',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+}
+
+/// 直播画面右上角常驻的「实时延迟 + 一键秒追帧」悬浮胶囊
+/// 即使底部控制栏自动隐藏，也能随时看到当前毫秒级缓冲延迟并一键点按追帧或重连
+class RealtimeLatencyFloatingBadge extends StatelessWidget {
+  const RealtimeLatencyFloatingBadge({super.key, required this.controller});
+
+  final VideoController controller;
+
+  Color _latencyColor(int ms) {
+    if (ms <= 120) return const Color(0xFF4ADE80);
+    if (ms <= 350) return const Color(0xFFFACC15);
+    return const Color(0xFFF87171);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      if (!MediaKitLiveProperties.showFloatingLatencyBadge.value) {
+        return const SizedBox.shrink();
+      }
+      final ms = MediaKitLiveProperties.realtimeBufferMs.value;
+      final speed = MediaKitLiveProperties.realtimeSpeed.value;
+      final color = _latencyColor(ms);
+      final speedText = speed > 1.01 ? ' · ${speed.toStringAsFixed(2)}x追帧中' : ' · 实时';
+
+      return Positioned(
+        top: 54,
+        right: 12,
+        child: Material(
+          color: Colors.black.withValues(alpha: 0.62),
+          shape: StadiumBorder(side: BorderSide(color: color.withValues(alpha: 0.75), width: 1.0)),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () async {
+              final afterMs = await MediaKitLiveProperties.flushLatencyNow();
+              ToastUtil.show('⚡ 极速追帧完成 (缓冲: ${afterMs}ms)');
+            },
+            onLongPress: () {
+              ToastUtil.show('🔄 正在重连最新实时流关键帧...');
+              controller.refresh();
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.bolt_rounded, size: 14, color: color),
+                  const SizedBox(width: 3),
+                  Text(
+                    '缓冲 ${ms}ms$speedText (点按追帧/长按重连)',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
   }
 }

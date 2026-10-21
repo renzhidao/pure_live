@@ -59,6 +59,7 @@ class DanmakuSettingsController extends GetxController {
   }
 
   final RxBool hideDanmaku = hiveBool('hideDanmaku', false);
+  final RxBool showDanmakuArea = hiveBool('showDanmakuArea', true);
   final RxBool noEmojiMode = hiveBool('noEmojiMode', defaultNoEmojiMode);
   final RxDouble danmakuTopArea = hiveDouble('danmakuTopArea', defaultDanmakuTopArea);
   final RxDouble danmakuArea = hiveDouble('danmakuArea', defaultDanmakuArea);
@@ -171,6 +172,7 @@ class DanmakuSettingsController extends GetxController {
   Map<String, dynamic> toJson() {
     return {
       'hideDanmaku': hideDanmaku.v,
+      'showDanmakuArea': showDanmakuArea.v,
       'noEmojiMode': noEmojiMode.v,
       'danmakuTopArea': danmakuTopArea.v,
       'danmakuArea': danmakuArea.v,

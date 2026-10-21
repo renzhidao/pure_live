@@ -605,6 +605,9 @@ class LivePlayContent extends StatelessWidget {
 
   Widget _buildDanmaku() {
     return Obx(() {
+      if (!SettingsService.to.danmaku.showDanmakuArea.v) {
+        return const SizedBox.shrink();
+      }
       final state = controller.state.value;
       if (!state.room.success || controller.site == Sites.iptvSite) {
         return const SizedBox.shrink();

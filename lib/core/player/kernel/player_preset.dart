@@ -38,7 +38,7 @@ enum PlayerPresetId {
 /// group, so an Android pick never leaks onto Windows.
 class PlayerEngineOutput {
   const PlayerEngineOutput({
-    this.presetId = PlayerPresetId.balanced,
+    this.presetId = PlayerPresetId.lowLatency,
     this.enableCodec = true,
     this.customPlayerOutput = false,
     this.videoOutputDriver = 'auto',
@@ -129,7 +129,7 @@ class PlayerEngineOutput {
     return PlayerEngineOutput(
       presetId: PlayerPresetId.values.firstWhere(
         (id) => id.name == json['preset'],
-        orElse: () => PlayerPresetId.balanced,
+        orElse: () => PlayerPresetId.lowLatency,
       ),
       enableCodec: json['enableCodec'] is bool ? json['enableCodec'] as bool : true,
       customPlayerOutput: json['customPlayerOutput'] is bool ? json['customPlayerOutput'] as bool : false,
@@ -200,10 +200,16 @@ extension PlayerPresetDetail on PlayerPresetId {
       'stream-lavf-o': 'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=7',
     },
     PlayerPresetId.lowLatency => const <String, String>{
+      'demuxer-lavf-probesize': '65536',
+      'demuxer-lavf-analyzeduration': '0.1',
+      'demuxer-lavf-o': 'fflags=nobuffer+fastseek+flush_packets',
+      'vd-lavc-o': 'flags=low_delay',
       'cache': 'no',
-      'demuxer-readahead-secs': '1',
+      'demuxer-readahead-secs': '0',
+      'audio-buffer': '0.04',
       'cache-pause': 'no',
       'framedrop': 'decoder+vo',
+      'untimed': 'yes',
       'network-timeout': '8',
     },
     _ => const <String, String>{},

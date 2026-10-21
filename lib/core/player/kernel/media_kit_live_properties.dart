@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:media_core/media_core.dart';
@@ -18,13 +19,21 @@ import 'package:pure_live/core/index.dart';
 /// demuxer budget, network timeout, decoder fallback and the per-platform
 /// quirks of the rooms this app plays.
 abstract final class MediaKitLiveProperties {
-  static const int forwardBytes = 96 * 1024 * 1024;
-  static const int backBytes = 8 * 1024 * 1024;
-  static const int lowEndForwardBytes = 40 * 1024 * 1024;
-  static const int lowEndBackBytes = 5 * 1024 * 1024;
-  static const int readaheadSeconds = 8;
-  static const int cacheSeconds = 30;
-  static const int cachePauseWaitSeconds = 4;
+  static const int forwardBytes = 8 * 1024 * 1024;
+  static const int backBytes = 0;
+  static const int lowEndForwardBytes = 4 * 1024 * 1024;
+  static const int lowEndBackBytes = 0;
+  static const int readaheadSeconds = 0;
+  static const int cacheSeconds = 0;
+  static const int cachePauseWaitSeconds = 0;
+
+  /// 当前活跃的底层 mpv 播放器实例与实时延迟监控状态
+  static Player? activePlayer;
+  static Timer? _latencyMonitorTimer;
+  static final RxInt realtimeBufferMs = 0.obs;
+  static final RxDouble realtimeSpeed = 1.0.obs;
+  static final RxBool autoCatchupEnabled = true.obs;
+  static final RxBool showFloatingLatencyBadge = true.obs;
 
   static bool get _lowEnd => _cpuCores <= 4;
 
@@ -49,13 +58,15 @@ abstract final class MediaKitLiveProperties {
   static Map<String, String> build() {
     final properties = <String, String>{
       'protocol_whitelist': 'httpproxy,udp,rtp,tcp,tls,data,file,http,https,crypto,rtmp,rtmps,rtsp,srt',
-      'demuxer-lavf-probesize': '2097152',
-      'demuxer-lavf-analyzeduration': '2',
-      'network-timeout': '15',
+      'demuxer-lavf-probesize': '65536',
+      'demuxer-lavf-analyzeduration': '0.1',
+      'demuxer-lavf-o': 'fflags=nobuffer+fastseek+flush_packets',
+      'vd-lavc-o': 'flags=low_delay',
+      'network-timeout': '8',
       // Drop a failing hw decoder after one bad frame.
       'hwdec-software-fallback': '1',
-      // Network cache-secs takes precedence over the smaller base readahead.
-      'cache': 'yes',
+      // 极限零延迟：关闭缓存与预读，即时上屏
+      'cache': 'no',
       'cache-on-disk': 'no',
       'cache-secs': cacheSeconds.toString(),
       'demuxer-max-bytes': (_lowEnd ? lowEndForwardBytes : forwardBytes).toString(),
@@ -63,12 +74,13 @@ abstract final class MediaKitLiveProperties {
       // Past media must not borrow the unused forward reserve.
       'demuxer-donate-buffer': 'no',
       'demuxer-readahead-secs': readaheadSeconds.toString(),
-      // Refill-then-resume: wait for a healthy buffer after a stall. Whether it
-      // is enabled at all is a per-source decision (see [sourceProperties]).
+      'audio-buffer': '0.04',
+      'cache-pause': 'no',
       'cache-pause-wait': cachePauseWaitSeconds.toString(),
       'demuxer-thread': 'yes',
       // Drop late frames instead of stacking lag.
       'framedrop': 'decoder+vo',
+      'untimed': 'yes',
     };
 
     if (_lowEnd) {
@@ -227,6 +239,7 @@ abstract final class MediaKitLiveProperties {
   }
 
   static Future<void> applyToSource(Player player, PlayerSource source) async {
+    activePlayer = player;
     final platform = player.platform;
     if (platform is! NativePlayer) return;
     final properties = sourceProperties(
@@ -237,6 +250,68 @@ abstract final class MediaKitLiveProperties {
     developer.log('${source.uri.host} -> $properties', name: 'PlaybackProxy');
     for (final entry in properties.entries) {
       await platform.setProperty(entry.key, entry.value);
+    }
+    _startLatencyMonitor(player);
+  }
+
+  /// 启动每 200ms 一次的 mpv 实时缓冲延迟监控与自动倍速追帧
+  static void _startLatencyMonitor(Player player) {
+    _latencyMonitorTimer?.cancel();
+    _latencyMonitorTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
+      final current = activePlayer;
+      if (current == null) return;
+      final platform = current.platform;
+      if (platform is! NativePlayer) return;
+      try {
+        final rawCache = await platform.getProperty('demuxer-cache-duration');
+        final cacheSec = double.tryParse(rawCache.trim()) ?? 0.0;
+        final ms = (cacheSec * 1000).round().clamp(0, 60000);
+        realtimeBufferMs.value = ms;
+
+        if (autoCatchupEnabled.value) {
+          if (ms > 150) {
+            final targetSpeed = ms > 500 ? 1.25 : 1.15;
+            if (realtimeSpeed.value != targetSpeed) {
+              await platform.setProperty('speed', targetSpeed.toStringAsFixed(2));
+              realtimeSpeed.value = targetSpeed;
+            }
+          } else if (ms <= 50 && realtimeSpeed.value != 1.0) {
+            await platform.setProperty('speed', '1.0');
+            realtimeSpeed.value = 1.0;
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  /// 一键手动极限追帧：立即排空解复用器与解码缓冲队列，强制追到实时边缘
+  static Future<int> flushLatencyNow() async {
+    final current = activePlayer;
+    if (current == null) return realtimeBufferMs.value;
+    final platform = current.platform;
+    if (platform is! NativePlayer) return realtimeBufferMs.value;
+    try {
+      await platform.setProperty('cache', 'no');
+      await platform.setProperty('demuxer-readahead-secs', '0');
+      await platform.setProperty('framedrop', 'decoder+vo');
+      await platform.setProperty('untimed', 'yes');
+      await platform.setProperty('speed', '1.25');
+      realtimeSpeed.value = 1.25;
+      Future<void>.delayed(const Duration(milliseconds: 650), () async {
+        try {
+          if (realtimeBufferMs.value <= 80) {
+            await platform.setProperty('speed', '1.0');
+            realtimeSpeed.value = 1.0;
+          }
+        } catch (_) {}
+      });
+      final rawCache = await platform.getProperty('demuxer-cache-duration');
+      final cacheSec = double.tryParse(rawCache.trim()) ?? 0.0;
+      final ms = (cacheSec * 1000).round().clamp(0, 60000);
+      realtimeBufferMs.value = ms;
+      return ms;
+    } catch (_) {
+      return realtimeBufferMs.value;
     }
   }
 
